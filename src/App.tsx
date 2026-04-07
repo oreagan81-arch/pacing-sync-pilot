@@ -3,8 +3,13 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import DashboardPage from "@/pages/DashboardPage";
+import PacingMasterPage from "@/pages/PacingMasterPage";
+import ContentOrganizerPage from "@/pages/ContentOrganizerPage";
+import AnnouncementCenterPage from "@/pages/AnnouncementCenterPage";
+import HealthMonitorPage from "@/pages/HealthMonitorPage";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -14,11 +19,16 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <DashboardLayout>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/pacing" element={<PacingMasterPage />} />
+            <Route path="/content" element={<ContentOrganizerPage />} />
+            <Route path="/announcements" element={<AnnouncementCenterPage />} />
+            <Route path="/health" element={<HealthMonitorPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </DashboardLayout>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
