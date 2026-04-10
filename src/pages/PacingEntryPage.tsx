@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Save, RefreshCw, Zap } from 'lucide-react';
+import PasteImportDialog from '@/components/PasteImportDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
@@ -293,6 +294,8 @@ export default function PacingEntryPage({
           onChange={(e) => setDateRange(e.target.value)}
           className="w-48"
         />
+
+        <PasteImportDialog onImport={(data) => setWeekData(data)} />
 
         <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">
           <Zap className="h-3.5 w-3.5" />
