@@ -14,7 +14,306 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      announcements: {
+        Row: {
+          content: string | null
+          course_id: number | null
+          created_at: string | null
+          id: string
+          posted_at: string | null
+          scheduled_post: string | null
+          status: string | null
+          subject: string | null
+          title: string | null
+          type: string | null
+          week_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          course_id?: number | null
+          created_at?: string | null
+          id?: string
+          posted_at?: string | null
+          scheduled_post?: string | null
+          status?: string | null
+          subject?: string | null
+          title?: string | null
+          type?: string | null
+          week_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          course_id?: number | null
+          created_at?: string | null
+          id?: string
+          posted_at?: string | null
+          scheduled_post?: string | null
+          status?: string | null
+          subject?: string | null
+          title?: string | null
+          type?: string | null
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deploy_log: {
+        Row: {
+          action: string | null
+          canvas_url: string | null
+          created_at: string | null
+          id: string
+          message: string | null
+          payload: Json | null
+          status: string | null
+          subject: string | null
+          week_id: string | null
+        }
+        Insert: {
+          action?: string | null
+          canvas_url?: string | null
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          payload?: Json | null
+          status?: string | null
+          subject?: string | null
+          week_id?: string | null
+        }
+        Update: {
+          action?: string | null
+          canvas_url?: string | null
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          payload?: Json | null
+          status?: string | null
+          subject?: string | null
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deploy_log_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      files: {
+        Row: {
+          confidence: string | null
+          created_at: string | null
+          drive_file_id: string | null
+          friendly_name: string | null
+          id: string
+          lesson_num: string | null
+          original_name: string | null
+          subject: string | null
+          type: string | null
+        }
+        Insert: {
+          confidence?: string | null
+          created_at?: string | null
+          drive_file_id?: string | null
+          friendly_name?: string | null
+          id?: string
+          lesson_num?: string | null
+          original_name?: string | null
+          subject?: string | null
+          type?: string | null
+        }
+        Update: {
+          confidence?: string | null
+          created_at?: string | null
+          drive_file_id?: string | null
+          friendly_name?: string | null
+          id?: string
+          lesson_num?: string | null
+          original_name?: string | null
+          subject?: string | null
+          type?: string | null
+        }
+        Relationships: []
+      }
+      newsletters: {
+        Row: {
+          birthdays: string | null
+          created_at: string | null
+          date_range: string | null
+          extra_sections: Json | null
+          homeroom_notes: string | null
+          html_content: string | null
+          id: string
+          posted_at: string | null
+          status: string | null
+        }
+        Insert: {
+          birthdays?: string | null
+          created_at?: string | null
+          date_range?: string | null
+          extra_sections?: Json | null
+          homeroom_notes?: string | null
+          html_content?: string | null
+          id?: string
+          posted_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          birthdays?: string | null
+          created_at?: string | null
+          date_range?: string | null
+          extra_sections?: Json | null
+          homeroom_notes?: string | null
+          html_content?: string | null
+          id?: string
+          posted_at?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      pacing_rows: {
+        Row: {
+          at_home: string | null
+          canvas_assignment_id: string | null
+          canvas_url: string | null
+          content_hash: string | null
+          create_assign: boolean | null
+          created_at: string | null
+          day: string
+          deploy_status: string | null
+          id: string
+          in_class: string | null
+          last_deployed: string | null
+          lesson_num: string | null
+          object_id: string | null
+          resources: string | null
+          subject: string
+          type: string | null
+          week_id: string | null
+        }
+        Insert: {
+          at_home?: string | null
+          canvas_assignment_id?: string | null
+          canvas_url?: string | null
+          content_hash?: string | null
+          create_assign?: boolean | null
+          created_at?: string | null
+          day: string
+          deploy_status?: string | null
+          id?: string
+          in_class?: string | null
+          last_deployed?: string | null
+          lesson_num?: string | null
+          object_id?: string | null
+          resources?: string | null
+          subject: string
+          type?: string | null
+          week_id?: string | null
+        }
+        Update: {
+          at_home?: string | null
+          canvas_assignment_id?: string | null
+          canvas_url?: string | null
+          content_hash?: string | null
+          create_assign?: boolean | null
+          created_at?: string | null
+          day?: string
+          deploy_status?: string | null
+          id?: string
+          in_class?: string | null
+          last_deployed?: string | null
+          lesson_num?: string | null
+          object_id?: string | null
+          resources?: string | null
+          subject?: string
+          type?: string | null
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pacing_rows_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_config: {
+        Row: {
+          assignment_prefixes: Json
+          auto_logic: Json
+          canvas_base_url: string | null
+          course_ids: Json
+          id: string
+          power_up_map: Json
+          quarter_colors: Json
+          spelling_word_bank: Json
+          updated_at: string | null
+        }
+        Insert: {
+          assignment_prefixes?: Json
+          auto_logic?: Json
+          canvas_base_url?: string | null
+          course_ids?: Json
+          id?: string
+          power_up_map?: Json
+          quarter_colors?: Json
+          spelling_word_bank?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          assignment_prefixes?: Json
+          auto_logic?: Json
+          canvas_base_url?: string | null
+          course_ids?: Json
+          id?: string
+          power_up_map?: Json
+          quarter_colors?: Json
+          spelling_word_bank?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      weeks: {
+        Row: {
+          created_at: string | null
+          date_range: string | null
+          id: string
+          quarter: string
+          reminders: string | null
+          resources: string | null
+          week_num: number
+        }
+        Insert: {
+          created_at?: string | null
+          date_range?: string | null
+          id?: string
+          quarter: string
+          reminders?: string | null
+          resources?: string | null
+          week_num: number
+        }
+        Update: {
+          created_at?: string | null
+          date_range?: string | null
+          id?: string
+          quarter?: string
+          reminders?: string | null
+          resources?: string | null
+          week_num?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
