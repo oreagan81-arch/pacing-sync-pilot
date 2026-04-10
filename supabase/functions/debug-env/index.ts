@@ -10,20 +10,28 @@ Deno.serve(async (req) => {
   }
 
   const urls = [
-    "https://ai-gateway.lovable.dev/v1/models",
-    "https://ai-gateway.lovable.app/v1/models",
-    "https://ai.lovable.dev/v1/models",
-    "https://gateway.lovable.dev/v1/models",
+    "https://ai-gateway.lovable.app/v1/chat/completions",
+    "https://ai-gateway.lovable.app/chat/completions",
   ];
   
   const results: Record<string, string> = {};
   for (const url of urls) {
     try {
       const resp = await fetch(url, {
-        headers: { "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY") || ""}` },
-        signal: AbortSignal.timeout(5000),
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY") || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [{ role: "user", content: "Say hi" }],
+          max_tokens: 10,
+        }),
+        signal: AbortSignal.timeout(10000),
       });
-      results[url] = `status: ${resp.status}`;
+      const body = await resp.text();
+      results[url] = `status: ${resp.status}, body: ${body.slice(0, 200)}`;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       results[url] = msg.length > 100 ? msg.slice(0, 100) : msg;
