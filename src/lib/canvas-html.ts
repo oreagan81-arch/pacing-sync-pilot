@@ -103,38 +103,19 @@ ${items}
   <div style="color:#333;">${brevityText}</div>
 </div>`;
 
-    // AT HOME — OMIT if Friday OR (no atHome text AND no canvasUrl)
+    // AT HOME — OMIT if Friday OR no Canvas assignment URL
     const isFriday = day === 'Friday';
-    const hasAtHome = row.at_home && row.at_home.trim();
     const hasCanvasUrl = row.canvas_url && row.canvas_url.trim();
 
-    if (!isFriday && (hasAtHome || hasCanvasUrl)) {
-      let atHomeContent = '';
-      if (hasAtHome) {
-        atHomeContent += `<div style="margin-bottom:4px;color:#333;">${row.at_home}</div>`;
-      }
-      if (hasCanvasUrl) {
-        const title = row.at_home || `Lesson ${row.lesson_num || ''}`;
-        atHomeContent += `<div style="margin-top:6px;">
+    if (!isFriday && hasCanvasUrl) {
+      const title = row.at_home || `Lesson ${row.lesson_num || ''}`;
+      content += `<div style="background:#f0f4ff;padding:12px 14px;border-radius:6px;border-left:3px solid #0065a7;margin-top:8px;">
+  <div style="font-size:11px;text-transform:uppercase;font-weight:bold;color:#0065a7;letter-spacing:1px;margin-bottom:8px;">At Home</div>
+  <div>
     <a href="${row.canvas_url}" target="_blank">
       <span style="font-weight:bold;color:#0065a7;">\uD83D\uDCCB ${title}</span>
     </a>
-  </div>`;
-      }
-      // Drive download link
-      if (row.object_id) {
-        const downloadUrl = `https://drive.google.com/uc?export=download&id=${row.object_id}`;
-        const label = row.resources || 'Resource';
-        atHomeContent += `<div style="margin-top:4px;">
-    <a href="${downloadUrl}" target="_blank">
-      <span style="color:#0065a7;">\u2193 ${label}</span>
-    </a>
-  </div>`;
-      }
-
-      content += `<div style="background:#f0f4ff;padding:12px 14px;border-radius:6px;border-left:3px solid #0065a7;margin-top:8px;">
-  <div style="font-size:11px;text-transform:uppercase;font-weight:bold;color:#0065a7;letter-spacing:1px;margin-bottom:8px;">At Home</div>
-  ${atHomeContent}
+  </div>
 </div>`;
     }
 
