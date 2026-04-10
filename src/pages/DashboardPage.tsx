@@ -92,6 +92,14 @@ export default function DashboardPage({
         .eq('week_id', week.id);
 
       const pacingRows = rows || [];
+      setPacingRows(pacingRows.map(r => ({
+        subject: r.subject,
+        day: r.day,
+        type: r.type,
+        lesson_num: r.lesson_num,
+        in_class: r.in_class,
+        deploy_status: r.deploy_status,
+      })));
       const riskRows: RiskRow[] = pacingRows.map(r => ({
         type: r.type,
         day: r.day,
