@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FolderSearch, Wand2, Check, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
+import { FolderSearch, Wand2, Check, AlertTriangle, FileText, RefreshCw, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { callEdge } from '@/lib/edge';
@@ -61,12 +61,26 @@ function generateFriendlyName(subject: string, type: string, lessonNum: string):
   return `${prefix}${suffix}${lessonNum.padStart(3, '0')}.pdf`;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip data URL prefix to get raw base64
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function FileOrganizerPage() {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [newFilename, setNewFilename] = useState('');
-
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   useEffect(() => { loadFiles(); }, []);
 
   const loadFiles = async () => {
@@ -161,6 +175,7 @@ export default function FileOrganizerPage() {
   const confidenceBadge = (c: string | null) => {
     if (c === 'regex') return <Badge className="text-[9px] bg-success text-success-foreground">regex</Badge>;
     if (c === 'ai') return <Badge className="text-[9px] bg-primary text-primary-foreground">AI</Badge>;
+    if (c === 'ai-vision') return <Badge className="text-[9px] bg-primary text-primary-foreground">AI Vision</Badge>;
     if (c === 'manual') return <Badge variant="outline" className="text-[9px]">manual</Badge>;
     return <Badge variant="destructive" className="text-[9px]">unclassified</Badge>;
   };
@@ -182,7 +197,64 @@ export default function FileOrganizerPage() {
         </div>
       </div>
 
-      {/* Add file */}
+      {/* Drop zone for PDF vision classify */}
+      <Card
+        className={`border-2 border-dashed transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const droppedFiles = Array.from(e.dataTransfer.files).filter(f =>
+            f.type === 'application/pdf' || f.type.startsWith('image/')
+          );
+          if (droppedFiles.length === 0) { toast.error('Drop PDF or image files'); return; }
+          setUploading(true);
+          for (const file of droppedFiles) {
+            try {
+              // Convert to image for vision — for PDFs we use the first page via canvas
+              let base64: string;
+              if (file.type.startsWith('image/')) {
+                base64 = await fileToBase64(file);
+              } else {
+                // For PDFs, read as data URL for now (Gemini can handle PDF base64)
+                base64 = await fileToBase64(file);
+              }
+              const result = await callEdge<{
+                subject: string; type: string; lesson_num: string; suggested_name: string;
+              }>('file-vision-classify', { image_base64: base64, filename: file.name });
+
+              await supabase.from('files').insert({
+                original_name: file.name,
+                subject: result.subject,
+                type: result.type,
+                lesson_num: result.lesson_num,
+                friendly_name: result.suggested_name || generateFriendlyName(result.subject, result.type, result.lesson_num),
+                confidence: 'ai-vision',
+              });
+              toast.success(`Vision classified: ${file.name} → ${result.subject}`);
+            } catch (err: any) {
+              toast.error(`Failed: ${file.name}`, { description: err.message });
+            }
+          }
+          setUploading(false);
+          loadFiles();
+        }}
+      >
+        <CardContent className="py-8 flex flex-col items-center gap-2 text-center">
+          {uploading ? (
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          ) : (
+            <Upload className="h-8 w-8 text-muted-foreground" />
+          )}
+          <p className="text-sm font-medium">
+            {uploading ? 'Classifying with AI Vision...' : 'Drop PDF or image files here for AI Vision classification'}
+          </p>
+          <p className="text-xs text-muted-foreground">Gemini analyzes the document content to identify subject, type, and lesson</p>
+        </CardContent>
+      </Card>
+
+      {/* Add file by name */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-2">

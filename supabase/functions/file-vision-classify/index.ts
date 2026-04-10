@@ -10,7 +10,7 @@ const classifyTool = {
   type: "function" as const,
   function: {
     name: "classify_file",
-    description: "Classify an educational file by subject, type, and lesson number.",
+    description: "Classify an educational file by subject, type, and lesson number based on its visual content.",
     parameters: {
       type: "object",
       properties: {
@@ -24,10 +24,14 @@ const classifyTool = {
         },
         lesson_num: {
           type: "string",
-          description: "Numeric lesson/test number extracted from the filename (digits only)",
+          description: "Numeric lesson/test number found in the document (digits only)",
+        },
+        suggested_name: {
+          type: "string",
+          description: "A friendly filename like SM5_L078_worksheet.pdf",
         },
       },
-      required: ["subject", "type", "lesson_num"],
+      required: ["subject", "type", "lesson_num", "suggested_name"],
       additionalProperties: false,
     },
   },
@@ -39,9 +43,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { filename } = await req.json();
-    if (!filename || typeof filename !== "string") {
-      return new Response(JSON.stringify({ error: "Missing filename" }), {
+    const { image_base64, filename } = await req.json();
+    if (!image_base64) {
+      return new Response(JSON.stringify({ error: "Missing image_base64" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -55,15 +59,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const prompt = `Classify this educational file based on its filename. The file is from a 4th/5th grade school.
+    const prompt = `Look at this educational worksheet/document image from a 4th/5th grade school. Identify the subject, type, and lesson number from the visual content.
 
-Filename: "${filename}"
+Common naming patterns for suggested_name:
+- Math = SM5, Reading = RM4, Spelling = RM4, Language Arts = ELA4, History = HIS4, Science = SCI4
+- worksheet = _L, test = _T, study_guide = _SG, answer_key = _AK
+- Format: PREFIX_TYPE + lesson num padded to 3 digits + .pdf
+  Example: SM5_L078.pdf, RM4_T012.pdf
 
-Common naming patterns:
-- SM5 = Saxon Math 5th grade
-- RM4 = Reading Mastery 4th grade  
-- ELA4 = English Language Arts 4th grade
-- L = Lesson, T = Test, SG = Study Guide
+${filename ? `Original filename: "${filename}"` : ""}
 
 Use the classify_file tool to return your answer.`;
 
@@ -74,8 +78,21 @@ Use the classify_file tool to return your answer.`;
         Authorization: `Bearer ${lovableApiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [{ role: "user", content: prompt }],
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/png;base64,${image_base64}`,
+                },
+              },
+            ],
+          },
+        ],
         temperature: 0.1,
         tools: [classifyTool],
         tool_choice: { type: "function", function: { name: "classify_file" } },
@@ -84,18 +101,9 @@ Use the classify_file tool to return your answer.`;
 
     if (!response.ok) {
       const errText = await response.text();
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, please try again later." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Add funds in Settings > Workspace > Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       return new Response(JSON.stringify({ error: `AI request failed: ${errText}` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: response.status === 429 ? 429 : response.status === 402 ? 402 : 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -104,18 +112,13 @@ Use the classify_file tool to return your answer.`;
 
     let parsed;
     if (toolCall?.function?.arguments) {
-      try {
-        parsed = JSON.parse(toolCall.function.arguments);
-      } catch {
-        parsed = { subject: "Unknown", type: "resource", lesson_num: "" };
-      }
+      parsed = JSON.parse(toolCall.function.arguments);
     } else {
-      // Fallback to content parsing
       const content = aiResult.choices?.[0]?.message?.content || "";
       try {
         parsed = JSON.parse(content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
       } catch {
-        parsed = { subject: "Unknown", type: "resource", lesson_num: "" };
+        parsed = { subject: "Unknown", type: "resource", lesson_num: "", suggested_name: filename || "unknown.pdf" };
       }
     }
 
