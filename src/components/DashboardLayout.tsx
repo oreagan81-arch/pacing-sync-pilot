@@ -13,7 +13,8 @@ interface DashboardLayoutProps {
 }
 
 const ROUTE_TITLES: Record<string, string> = {
-  '/': 'Pacing Entry',
+  '/': 'Dashboard',
+  '/pacing': 'Pacing Entry',
   '/pages': 'Page Builder',
   '/assignments': 'Assignments',
   '/announcements': 'Announcements',
