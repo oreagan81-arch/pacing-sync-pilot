@@ -7,6 +7,7 @@ import {
   FolderSearch,
   Activity,
   Settings,
+  LayoutDashboard,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -26,7 +27,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 
 const navItems = [
-  { title: 'Pacing Entry', url: '/', icon: Database },
+  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Pacing Entry', url: '/pacing', icon: Database },
   { title: 'Page Builder', url: '/pages', icon: Globe },
   { title: 'Assignments', url: '/assignments', icon: ClipboardList },
   { title: 'Announcements', url: '/announcements', icon: Megaphone },

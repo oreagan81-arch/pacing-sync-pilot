@@ -7,6 +7,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { ConfigContext, loadConfig, type AppConfig } from '@/lib/config';
 import { useEffect, useState } from 'react';
 
+import DashboardPage from '@/pages/DashboardPage';
 import PacingEntryPage from '@/pages/PacingEntryPage';
 import PageBuilderPage from '@/pages/PageBuilderPage';
 import AssignmentsPage from '@/pages/AssignmentsPage';
@@ -47,6 +48,16 @@ function AppContent({ config }: { config: AppConfig }) {
         <Routes>
           <Route
             path="/"
+            element={
+              <DashboardPage
+                activeQuarter={activeQuarter}
+                activeWeek={activeWeek}
+                quarterColor={quarterColor}
+              />
+            }
+          />
+          <Route
+            path="/pacing"
             element={
               <PacingEntryPage
                 activeQuarter={activeQuarter}
