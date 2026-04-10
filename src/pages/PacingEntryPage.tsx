@@ -295,6 +295,8 @@ export default function PacingEntryPage({
           className="w-48"
         />
 
+        <PasteImportDialog onImport={(data) => setWeekData(data)} />
+
         <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">
           <Zap className="h-3.5 w-3.5" />
           Auto-Remind
