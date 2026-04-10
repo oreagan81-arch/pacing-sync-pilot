@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Megaphone, Clock, Send, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Megaphone, Clock, Send, Plus, Trash2, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { callEdge } from '@/lib/edge';
+import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 
 interface Announcement {
   id: string;
@@ -40,6 +41,7 @@ export default function AnnouncementCenterPage() {
   const [selectedWeekId, setSelectedWeekId] = useState('');
   const [loading, setLoading] = useState(false);
   const [posting, setPosting] = useState<Record<string, boolean>>({});
+  const [postingAll, setPostingAll] = useState(false);
 
   // New announcement form
   const [showForm, setShowForm] = useState(false);
@@ -47,6 +49,12 @@ export default function AnnouncementCenterPage() {
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formType, setFormType] = useState('test_reminder');
+
+  // Realtime: refresh announcements when deploy log shows announcement_post
+  const handleRealtimeEvent = useCallback(() => {
+    loadAnnouncements(selectedWeekId || undefined);
+  }, [selectedWeekId]);
+  useRealtimeDeploy(handleRealtimeEvent);
 
   useEffect(() => {
     supabase.from('weeks').select('id, quarter, week_num').order('quarter').order('week_num')
@@ -84,9 +92,9 @@ export default function AnnouncementCenterPage() {
 
       let body = `${row.subject} ${row.type} ${row.lesson_num || ''} is coming up. Study and prepare!`;
       if (row.subject === 'Reading') body = 'Remember: tracking and tapping, 100 words per minute. Practice daily.';
-      if (row.subject === 'Spelling') body = `Study words 21–25 from your cumulative word bank. Quiz on Friday.`;
+      if (row.subject === 'Spelling') body = `Study words 21\u201325 from your cumulative word bank. Quiz on Friday.`;
 
-      const title = `${row.subject} ${row.type} ${row.lesson_num || ''} — Reminder`.trim();
+      const title = `${row.subject} ${row.type} ${row.lesson_num || ''} \u2014 Reminder`.trim();
 
       await supabase.from('announcements').insert({
         week_id: selectedWeekId,
@@ -153,8 +161,31 @@ export default function AnnouncementCenterPage() {
   const handlePostAll = async () => {
     const drafts = announcements.filter(a => a.status === 'DRAFT');
     if (drafts.length === 0) { toast.info('No drafts to post'); return; }
-    for (const ann of drafts) await handlePost(ann);
+    setPostingAll(true);
+    const toastId = toast.loading(`Posting 0/${drafts.length} announcements\u2026`);
+    let done = 0;
+    let errors = 0;
+
+    for (const ann of drafts) {
+      toast.loading(`Posting "${ann.title}" (${done + 1}/${drafts.length})\u2026`, { id: toastId });
+      try {
+        await handlePost(ann);
+      } catch {
+        errors++;
+      }
+      done++;
+    }
+
+    if (errors > 0) {
+      toast.warning(`Posted ${done - errors}/${drafts.length} (${errors} failed)`, { id: toastId });
+    } else {
+      toast.success(`All ${drafts.length} announcements posted! \u2705`, { id: toastId });
+    }
+    setPostingAll(false);
   };
+
+  const draftCount = announcements.filter(a => a.status === 'DRAFT').length;
+  const postedCount = announcements.filter(a => a.status === 'POSTED').length;
 
   const statusColor = (s: string | null) => {
     if (s === 'POSTED') return 'bg-success text-success-foreground';
@@ -169,7 +200,17 @@ export default function AnnouncementCenterPage() {
           <h1 className="text-3xl font-bold tracking-tight">Announcement Center</h1>
           <p className="text-muted-foreground mt-1">Create, auto-generate, and post announcements to Canvas</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {draftCount > 0 && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Clock className="h-3 w-3" /> {draftCount} draft{draftCount !== 1 ? 's' : ''}
+            </Badge>
+          )}
+          {postedCount > 0 && (
+            <Badge className="text-xs bg-success/10 text-success border-success/20 gap-1">
+              <CheckCircle2 className="h-3 w-3" /> {postedCount} posted
+            </Badge>
+          )}
           <Select value={selectedWeekId || '__all__'} onValueChange={v => setSelectedWeekId(v === '__all__' ? '' : v)}>
             <SelectTrigger className="w-40"><SelectValue placeholder="All weeks" /></SelectTrigger>
             <SelectContent>
@@ -183,14 +224,15 @@ export default function AnnouncementCenterPage() {
           <Button variant="outline" size="sm" onClick={() => setShowForm(!showForm)} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" /> New
           </Button>
-          <Button size="sm" onClick={handlePostAll} className="gap-1.5">
-            <Send className="h-3.5 w-3.5" /> Post All Drafts
+          <Button size="sm" onClick={handlePostAll} disabled={postingAll || draftCount === 0} className="gap-1.5">
+            {postingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {postingAll ? 'Posting\u2026' : 'Post All Drafts'}
           </Button>
         </div>
       </div>
 
       {showForm && (
-        <Card>
+        <Card className="border-primary/20 shadow-md">
           <CardContent className="pt-6 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <Select value={formSubject} onValueChange={setFormSubject}>
@@ -220,11 +262,16 @@ export default function AnnouncementCenterPage() {
 
       <div className="grid gap-4">
         {loading ? (
-          <Card><CardContent className="py-8 text-center text-muted-foreground">Loading...</CardContent></Card>
+          <Card><CardContent className="py-8 text-center text-muted-foreground flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading announcements...
+          </CardContent></Card>
         ) : announcements.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-muted-foreground">No announcements yet. Auto-generate from test data or create manually.</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-muted-foreground">
+            <Megaphone className="h-10 w-10 mx-auto mb-3 opacity-20" />
+            <p className="text-sm">No announcements yet. Auto-generate from test data or create manually.</p>
+          </CardContent></Card>
         ) : announcements.map(ann => (
-          <Card key={ann.id} className="glass">
+          <Card key={ann.id} className={`transition-all ${ann.status === 'POSTED' ? 'opacity-70' : ''}`}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -245,15 +292,16 @@ export default function AnnouncementCenterPage() {
                     <Clock className="h-3 w-3" />
                     {ann.scheduled_post ? new Date(ann.scheduled_post).toLocaleString() : 'Not scheduled'}
                   </span>
-                  {ann.posted_at && <span>Posted {new Date(ann.posted_at).toLocaleString()}</span>}
+                  {ann.posted_at && <span className="text-success">Posted {new Date(ann.posted_at).toLocaleString()}</span>}
                 </div>
                 <div className="flex gap-2">
                   {ann.status === 'DRAFT' && (
                     <Button size="sm" variant="outline" onClick={() => handlePost(ann)} disabled={posting[ann.id]} className="gap-1 text-xs">
-                      <Send className="h-3 w-3" /> Post
+                      {posting[ann.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                      Post
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => handleDelete(ann.id)} className="text-destructive">
+                  <Button size="sm" variant="ghost" onClick={() => handleDelete(ann.id)} className="text-destructive hover:text-destructive">
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>

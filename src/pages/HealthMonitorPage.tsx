@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw, Clock } from 'lucide-react';
+import { Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw, Clock, Loader2, Wifi } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface DeployLogEntry {
   id: string;
@@ -29,6 +30,14 @@ export default function HealthMonitorPage() {
   const [stats, setStats] = useState<Stats>({ total: 0, deployed: 0, errors: 0, noChange: 0 });
   const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
+  const [connected, setConnected] = useState(false);
+
+  const computeStats = (entries: DeployLogEntry[]) => ({
+    total: entries.length,
+    deployed: entries.filter(l => l.status === 'DEPLOYED').length,
+    errors: entries.filter(l => l.status === 'ERROR').length,
+    noChange: entries.filter(l => l.status === 'NO_CHANGE').length,
+  });
 
   const loadLogs = async () => {
     setLoading(true);
@@ -37,26 +46,36 @@ export default function HealthMonitorPage() {
     const { data } = await query;
     if (data) {
       setLogs(data);
-      setStats({
-        total: data.length,
-        deployed: data.filter(l => l.status === 'DEPLOYED').length,
-        errors: data.filter(l => l.status === 'ERROR').length,
-        noChange: data.filter(l => l.status === 'NO_CHANGE').length,
-      });
+      setStats(computeStats(data));
     }
     setLoading(false);
   };
 
   useEffect(() => { loadLogs(); }, [filter]);
 
-  // Realtime subscription
+  // Realtime subscription with connection status
   useEffect(() => {
     const channel = supabase
       .channel('deploy-log-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'deploy_log' }, (payload) => {
-        setLogs(prev => [payload.new as DeployLogEntry, ...prev].slice(0, 100));
+        const newEntry = payload.new as DeployLogEntry;
+        setLogs(prev => {
+          const updated = [newEntry, ...prev].slice(0, 100);
+          setStats(computeStats(updated));
+          return updated;
+        });
+        
+        // Flash toast for new events
+        const label = [newEntry.action?.replace(/_/g, ' '), newEntry.subject].filter(Boolean).join(' \u2014 ');
+        if (newEntry.status === 'DEPLOYED') {
+          toast.success(label, { description: newEntry.message || undefined });
+        } else if (newEntry.status === 'ERROR') {
+          toast.error(label, { description: newEntry.message || undefined });
+        }
       })
-      .subscribe();
+      .subscribe((status) => {
+        setConnected(status === 'SUBSCRIBED');
+      });
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -75,7 +94,7 @@ export default function HealthMonitorPage() {
   };
 
   const formatTime = (ts: string | null) => {
-    if (!ts) return '—';
+    if (!ts) return '\u2014';
     const d = new Date(ts);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
@@ -92,7 +111,11 @@ export default function HealthMonitorPage() {
           <h1 className="text-3xl font-bold tracking-tight">Health Monitor</h1>
           <p className="text-muted-foreground mt-1">Real-time deployment logs &amp; system diagnostics</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <Badge variant="outline" className={`text-[10px] gap-1 ${connected ? 'text-success border-success/30' : 'text-muted-foreground'}`}>
+            <Wifi className="h-3 w-3" />
+            {connected ? 'Live' : 'Connecting\u2026'}
+          </Badge>
           <Select value={filter} onValueChange={setFilter}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -102,33 +125,34 @@ export default function HealthMonitorPage() {
               <SelectItem value="announcement_post">Announcements</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={loadLogs} className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          <Button variant="outline" size="sm" onClick={loadLogs} disabled={loading} className="gap-1.5">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Refresh
           </Button>
         </div>
       </div>
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="pt-6 text-center">
             <p className="text-3xl font-extrabold">{stats.total}</p>
             <p className="text-xs text-muted-foreground uppercase mt-1">Total</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="pt-6 text-center">
             <p className="text-3xl font-extrabold text-success">{stats.deployed}</p>
             <p className="text-xs text-muted-foreground uppercase mt-1">Deployed</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="pt-6 text-center">
             <p className="text-3xl font-extrabold text-destructive">{stats.errors}</p>
             <p className="text-xs text-muted-foreground uppercase mt-1">Errors</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="pt-6 text-center">
             <p className="text-3xl font-extrabold text-warning">{stats.noChange}</p>
             <p className="text-xs text-muted-foreground uppercase mt-1">No Change</p>
@@ -142,7 +166,12 @@ export default function HealthMonitorPage() {
           <CardTitle className="text-base flex items-center gap-2">
             <Activity className="h-4 w-4" />
             Deployment Log
-            <Badge variant="outline" className="text-[10px] ml-2">Live</Badge>
+            {connected && (
+              <span className="relative flex h-2 w-2 ml-1">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -159,11 +188,16 @@ export default function HealthMonitorPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">Loading...</td></tr>
+                  <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />Loading logs...
+                  </td></tr>
                 ) : logs.length === 0 ? (
-                  <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">No deployment logs yet.</td></tr>
-                ) : logs.map(log => (
-                  <tr key={log.id} className="border-t hover:bg-muted/50">
+                  <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">
+                    <Activity className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    No deployment logs yet.
+                  </td></tr>
+                ) : logs.map((log, idx) => (
+                  <tr key={log.id} className={`border-t hover:bg-muted/50 transition-colors ${idx === 0 ? 'bg-primary/5' : ''}`}>
                     <td className="p-3 font-mono text-xs whitespace-nowrap">
                       <div>{formatTime(log.created_at)}</div>
                       <div className="text-muted-foreground text-[10px]">{formatDate(log.created_at)}</div>
@@ -171,8 +205,11 @@ export default function HealthMonitorPage() {
                     <td className="p-3">
                       <Badge variant="outline" className="text-[10px]">{log.action}</Badge>
                     </td>
-                    <td className="p-3 text-xs font-medium">{log.subject || '—'}</td>
-                    <td className="p-3">{statusBadge(log.status)}</td>
+                    <td className="p-3 text-xs font-medium">{log.subject || '\u2014'}</td>
+                    <td className="p-3 flex items-center gap-1.5">
+                      {statusIcon(log.status)}
+                      {statusBadge(log.status)}
+                    </td>
                     <td className="p-3 text-xs text-muted-foreground max-w-[300px] truncate">
                       {log.canvas_url ? (
                         <a href={log.canvas_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">

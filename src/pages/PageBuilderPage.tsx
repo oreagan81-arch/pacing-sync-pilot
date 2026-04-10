@@ -1,16 +1,17 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { generateCanvasPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
 import { callEdge } from '@/lib/edge';
 import { computeContentHash } from '@/lib/assignment-logic';
+import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -42,6 +43,17 @@ export default function PageBuilderPage() {
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
 
+  // Realtime deploy notifications — update statuses live
+  const handleRealtimeEvent = useCallback((event: any) => {
+    if (event.action === 'page_deploy' && event.subject) {
+      setDeployStatuses((prev) => ({
+        ...prev,
+        [event.subject]: { status: event.status || 'DEPLOYED', canvasUrl: event.canvas_url || undefined },
+      }));
+    }
+  }, []);
+  useRealtimeDeploy(handleRealtimeEvent);
+
   // Load weeks list
   useEffect(() => {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
@@ -56,16 +68,7 @@ export default function PageBuilderPage() {
     setSelectedWeek(week || null);
 
     supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId).then(({ data }) => {
-      if (data) {
-        setRows(data as unknown as CanvasPageRow[]);
-        // Load existing deploy statuses
-        const statuses: Record<string, { status: string; canvasUrl?: string }> = {};
-        for (const row of data) {
-          if (!statuses[row.subject] && row.deploy_status) {
-            // Use latest deploy status per subject
-          }
-        }
-      }
+      if (data) setRows(data as unknown as CanvasPageRow[]);
     });
 
     // Load deploy log for this week's pages
@@ -112,7 +115,6 @@ export default function PageBuilderPage() {
     });
   }, [subjectRows, selectedWeek, activeSubject, config]);
 
-  // Page URL slug
   const getPageUrl = (subject: string, weekNum: number) => {
     const slug = subject === 'Reading' ? 'reading-spelling' : subject.toLowerCase().replace(/\s+/g, '-');
     return `week-${weekNum}-${slug}-agenda`;
@@ -151,7 +153,6 @@ export default function PageBuilderPage() {
     });
 
     setDeploying((p) => ({ ...p, [subject]: true }));
-    const toastId = toast.loading(`Deploying ${subject} page\u2026`);
 
     try {
       const result = await callEdge<DeployResult>('canvas-deploy-page', {
@@ -167,36 +168,54 @@ export default function PageBuilderPage() {
       setDeployStatuses((p) => ({ ...p, [subject]: { status: result.status, canvasUrl: result.canvasUrl } }));
 
       if (result.status === 'NO_CHANGE') {
-        toast.info(`${subject} — no changes`, { id: toastId });
+        toast.info(`${subject} — no changes`);
       } else {
         toast.success(`${subject} deployed!`, {
-          id: toastId,
-          description: 'View in Canvas \u2192',
           action: result.canvasUrl ? { label: 'Open', onClick: () => window.open(result.canvasUrl, '_blank') } : undefined,
         });
       }
     } catch (e: any) {
-      toast.error(`Deploy failed — ${subject}`, { id: toastId, description: e.message });
+      toast.error(`Deploy failed — ${subject}`, { description: e.message });
       setDeployStatuses((p) => ({ ...p, [subject]: { status: 'ERROR' } }));
     }
     setDeploying((p) => ({ ...p, [subject]: false }));
   };
 
-  // Deploy all pages
+  // Deploy all pages with progress toast
   const handleDeployAll = async () => {
     setDeployingAll(true);
-    const toastId = toast.loading('Deploying all pages\u2026');
-    let done = 0;
-    for (const subject of PAGE_SUBJECTS) {
-      const sRows = subject === 'Reading'
+    const subjects = PAGE_SUBJECTS.filter((s) => {
+      const sRows = s === 'Reading'
         ? rows.filter((r) => r.subject === 'Reading' || r.subject === 'Spelling')
-        : rows.filter((r) => r.subject === subject);
-      if (sRows.length === 0) continue;
-      done++;
-      toast.loading(`Deploying (${done}/${PAGE_SUBJECTS.length})\u2026`, { id: toastId });
-      await handleDeploy(subject);
+        : rows.filter((r) => r.subject === s);
+      return sRows.length > 0;
+    });
+
+    if (subjects.length === 0) {
+      toast.error('No data to deploy');
+      setDeployingAll(false);
+      return;
     }
-    toast.success('All pages deployed!', { id: toastId });
+
+    const toastId = toast.loading(`Deploying 0/${subjects.length} pages\u2026`);
+    let done = 0;
+    let errors = 0;
+
+    for (const subject of subjects) {
+      toast.loading(`Deploying ${subject} (${done + 1}/${subjects.length})\u2026`, { id: toastId });
+      try {
+        await handleDeploy(subject);
+      } catch {
+        errors++;
+      }
+      done++;
+    }
+
+    if (errors > 0) {
+      toast.warning(`Deployed ${done - errors}/${subjects.length} pages (${errors} failed)`, { id: toastId });
+    } else {
+      toast.success(`All ${subjects.length} pages deployed! \u2705`, { id: toastId });
+    }
     setDeployingAll(false);
   };
 
@@ -243,8 +262,8 @@ export default function PageBuilderPage() {
             disabled={deployingAll || !selectedWeekId}
             className="gap-1.5"
           >
-            <Rocket className="h-3.5 w-3.5" />
-            Deploy All Pages
+            {deployingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+            {deployingAll ? 'Deploying\u2026' : 'Deploy All Pages'}
           </Button>
         </div>
       </div>
@@ -253,7 +272,7 @@ export default function PageBuilderPage() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Globe className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p>Select a saved week to preview and deploy agenda pages.</p>
+            <p className="text-sm">Select a saved week to preview and deploy agenda pages.</p>
           </CardContent>
         </Card>
       ) : (
@@ -263,8 +282,10 @@ export default function PageBuilderPage() {
             <Tabs value={activeSubject} onValueChange={setActiveSubject}>
               <TabsList>
                 {PAGE_SUBJECTS.map((s) => (
-                  <TabsTrigger key={s} value={s} className="text-xs">
+                  <TabsTrigger key={s} value={s} className="text-xs gap-1.5">
                     {s === 'Reading' ? 'Reading & Spelling' : s}
+                    {deployStatuses[s]?.status === 'DEPLOYED' && <CheckCircle2 className="h-3 w-3 text-success" />}
+                    {deployStatuses[s]?.status === 'ERROR' && <AlertTriangle className="h-3 w-3 text-destructive" />}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -281,8 +302,8 @@ export default function PageBuilderPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-xs text-muted-foreground space-y-1">
-                  <p><strong>Page URL:</strong> {selectedWeek ? getPageUrl(activeSubject, selectedWeek.week_num) : '—'}</p>
-                  <p><strong>Course ID:</strong> {config?.courseIds[activeSubject] || '—'}</p>
+                  <p><strong>Page URL:</strong> {selectedWeek ? getPageUrl(activeSubject, selectedWeek.week_num) : '\u2014'}</p>
+                  <p><strong>Course ID:</strong> {config?.courseIds[activeSubject] || '\u2014'}</p>
                   {deployStatuses[activeSubject]?.canvasUrl && (
                     <p>
                       <strong>Canvas URL:</strong>{' '}
@@ -306,7 +327,7 @@ export default function PageBuilderPage() {
                     disabled={deploying[activeSubject]}
                     className="gap-1.5"
                   >
-                    <Rocket className="h-3.5 w-3.5" />
+                    {deploying[activeSubject] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
                     {deploying[activeSubject] ? 'Deploying\u2026' : 'Deploy Page'}
                   </Button>
                 </div>
@@ -329,12 +350,15 @@ export default function PageBuilderPage() {
                         return dayRows.map((r, i) => (
                           <tr key={`${day}-${i}`} className="border-t">
                             <td className="p-2 font-medium">{i === 0 ? day : ''}</td>
-                            <td className="p-2">{r.type || '—'}</td>
-                            <td className="p-2">{r.lesson_num || '—'}</td>
-                            <td className="p-2 max-w-[200px] truncate">{r.in_class || '—'}</td>
+                            <td className="p-2">{r.type || '\u2014'}</td>
+                            <td className="p-2">{r.lesson_num || '\u2014'}</td>
+                            <td className="p-2 max-w-[200px] truncate">{r.in_class || '\u2014'}</td>
                           </tr>
                         ));
                       })}
+                      {subjectRows.length === 0 && (
+                        <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">No pacing data for this subject.</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -374,9 +398,10 @@ export default function PageBuilderPage() {
             <Card className="min-h-[500px]">
               <CardContent className="p-4">
                 {!generatedHtml ? (
-                  <p className="text-sm text-muted-foreground text-center py-12">
-                    No data for this subject/week.
-                  </p>
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                    <Globe className="h-10 w-10 mb-3 opacity-20" />
+                    <p className="text-sm">No data for this subject/week.</p>
+                  </div>
                 ) : previewMode === 'preview' ? (
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-3 uppercase tracking-wider font-semibold">
