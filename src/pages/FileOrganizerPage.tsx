@@ -175,6 +175,7 @@ export default function FileOrganizerPage() {
   const confidenceBadge = (c: string | null) => {
     if (c === 'regex') return <Badge className="text-[9px] bg-success text-success-foreground">regex</Badge>;
     if (c === 'ai') return <Badge className="text-[9px] bg-primary text-primary-foreground">AI</Badge>;
+    if (c === 'ai-vision') return <Badge className="text-[9px] bg-primary text-primary-foreground">AI Vision</Badge>;
     if (c === 'manual') return <Badge variant="outline" className="text-[9px]">manual</Badge>;
     return <Badge variant="destructive" className="text-[9px]">unclassified</Badge>;
   };
