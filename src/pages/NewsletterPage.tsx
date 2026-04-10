@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Mail, Wand2, Send, Eye, Code, Copy, Plus, Trash2 } from 'lucide-react';
+import { Mail, Wand2, Send, Eye, Code, Copy, Plus, Trash2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
@@ -38,6 +38,7 @@ export default function NewsletterPage() {
   const [previewMode, setPreviewMode] = useState<'edit' | 'preview' | 'code'>('edit');
   const [activeNewsletterId, setActiveNewsletterId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
+  const [polishing, setPolishing] = useState(false);
 
   useEffect(() => {
     loadNewsletters();
@@ -71,6 +72,30 @@ export default function NewsletterPage() {
       toast.error('Extraction failed', { description: e.message });
     }
     setExtracting(false);
+  };
+
+  const handlePolish = async () => {
+    if (!homeroomNotes && extraSections.length === 0) { toast.error('Add content first'); return; }
+    setPolishing(true);
+    try {
+      const result = await callEdge<{
+        homeroom_notes: string;
+        birthdays: string;
+        sections: { title: string; body: string }[];
+      }>('newsletter-extract', {
+        action: 'polish',
+        homeroom_notes: homeroomNotes,
+        birthdays,
+        sections: extraSections,
+      });
+      setHomeroomNotes(result.homeroom_notes || homeroomNotes);
+      setBirthdays(result.birthdays || birthdays);
+      if (result.sections?.length) setExtraSections(result.sections);
+      toast.success('Content polished by AI!');
+    } catch (e: any) {
+      toast.error('Polish failed', { description: e.message });
+    }
+    setPolishing(false);
   };
 
   const generateHtml = () => {
@@ -249,9 +274,14 @@ export default function NewsletterPage() {
                 ))}
               </div>
 
-              <Button onClick={generateHtml} className="gap-1.5">
-                <Code className="h-3.5 w-3.5" /> Generate HTML
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handlePolish} disabled={polishing} className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> {polishing ? 'Polishing...' : 'AI Polish'}
+                </Button>
+                <Button onClick={generateHtml} className="gap-1.5">
+                  <Code className="h-3.5 w-3.5" /> Generate HTML
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
