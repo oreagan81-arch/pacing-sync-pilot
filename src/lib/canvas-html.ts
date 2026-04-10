@@ -57,11 +57,26 @@ ${items}
 </div>`);
   }
 
-  // 3. RESOURCES (omit if empty)
+  // 3. RESOURCES — auto-populated from per-day pacing row resources fields
+  const allResources: string[] = [];
+  for (const row of rows) {
+    if (row.resources && row.resources.trim()) {
+      row.resources.split('\n').filter(Boolean).forEach((r) => {
+        const trimmed = r.trim();
+        if (!allResources.includes(trimmed)) allResources.push(trimmed);
+      });
+    }
+  }
+  // Also include week-level resources if provided
   if (resources && resources.trim()) {
-    const items = resources.split('\n').filter(Boolean).map((r) => {
+    resources.split('\n').filter(Boolean).forEach((r) => {
       const trimmed = r.trim();
-      // If it looks like a URL, make it a link
+      if (!allResources.includes(trimmed)) allResources.push(trimmed);
+    });
+  }
+
+  if (allResources.length > 0) {
+    const items = allResources.map((trimmed) => {
       if (trimmed.startsWith('http')) {
         const label = trimmed.split('/').pop() || 'Resource';
         return `  <div style="margin-bottom:6px;">
