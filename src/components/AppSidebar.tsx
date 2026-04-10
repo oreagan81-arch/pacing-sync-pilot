@@ -1,13 +1,15 @@
 import {
-  LayoutDashboard,
-  TableProperties,
-  FolderOpen,
+  Database,
+  Globe,
+  ClipboardList,
   Megaphone,
+  Mail,
+  FolderSearch,
   Activity,
-  Rocket,
-} from "lucide-react";
-import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+  Settings,
+} from 'lucide-react';
+import { NavLink } from '@/components/NavLink';
+import { useLocation } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -20,45 +22,86 @@ import {
   SidebarHeader,
   SidebarFooter,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from '@/components/ui/sidebar';
+import { Badge } from '@/components/ui/badge';
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Pacing Master", url: "/pacing", icon: TableProperties },
-  { title: "Content Organizer", url: "/content", icon: FolderOpen },
-  { title: "Announcements", url: "/announcements", icon: Megaphone },
-  { title: "AI Health Monitor", url: "/health", icon: Activity },
+  { title: 'Pacing Entry', url: '/', icon: Database },
+  { title: 'Page Builder', url: '/pages', icon: Globe },
+  { title: 'Assignments', url: '/assignments', icon: ClipboardList },
+  { title: 'Announcements', url: '/announcements', icon: Megaphone },
+  { title: 'Newsletter', url: '/newsletter', icon: Mail },
+  { title: 'File Organizer', url: '/files', icon: FolderSearch },
+  { title: 'Health Monitor', url: '/health', icon: Activity },
+  { title: 'Settings', url: '/settings', icon: Settings },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  activeQuarter: string;
+  activeWeek: number;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskScore: number;
+  quarterColor: string;
+}
+
+export function AppSidebar({
+  activeQuarter,
+  activeWeek,
+  riskLevel,
+  riskScore,
+  quarterColor,
+}: AppSidebarProps) {
   const { state } = useSidebar();
-  const collapsed = state === "collapsed";
+  const collapsed = state === 'collapsed';
   const location = useLocation();
+
+  const riskColorClass =
+    riskLevel === 'HIGH'
+      ? 'bg-destructive text-destructive-foreground'
+      : riskLevel === 'MEDIUM'
+        ? 'bg-warning text-warning-foreground'
+        : 'bg-success text-success-foreground';
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-            <Rocket className="h-4 w-4 text-sidebar-primary-foreground" />
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            style={{ backgroundColor: quarterColor }}
+          >
+            <Activity className="h-4 w-4 text-white" />
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-bold text-sidebar-primary-foreground tracking-tight">
+              <span className="text-sm font-extrabold text-sidebar-primary-foreground tracking-tight">
                 Thales OS
               </span>
-              <span className="text-xs text-sidebar-foreground/60">
-                Command Center
+              <span className="text-[10px] text-sidebar-foreground/60">
+                v14.1.0
               </span>
             </div>
           )}
         </div>
+        {!collapsed && (
+          <div className="flex gap-2 mt-3">
+            <Badge
+              className="text-[10px] px-2 py-0.5 rounded-full text-white border-0"
+              style={{ backgroundColor: quarterColor }}
+            >
+              {activeQuarter}
+            </Badge>
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 rounded-full text-sidebar-foreground/70">
+              Week {activeWeek}
+            </Badge>
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider">
-            Navigation
+          <SidebarGroupLabel className="text-sidebar-foreground/50 text-[10px] uppercase tracking-wider">
+            Modules
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -67,9 +110,15 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      end={item.url === "/"}
+                      end={item.url === '/'}
                       className="hover:bg-sidebar-accent/50 transition-colors"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      activeClassName="text-white font-semibold"
+                      style={
+                        location.pathname === item.url ||
+                        (item.url === '/' && location.pathname === '/')
+                          ? { backgroundColor: quarterColor }
+                          : undefined
+                      }
                     >
                       <item.icon className="mr-2 h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
@@ -82,14 +131,30 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-4">
+      <SidebarFooter className="border-t border-sidebar-border p-4 space-y-3">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="status-dot bg-success animate-pulse" />
-            <span className="text-xs text-sidebar-foreground/60">
-              System Online
-            </span>
-          </div>
+          <>
+            <div className={`rounded-lg p-3 ${riskColorClass}`}>
+              <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">
+                Risk Score
+              </div>
+              <div className="text-xl font-extrabold">{riskScore}</div>
+              <div className="text-[10px] font-semibold">{riskLevel}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold text-sidebar-foreground">
+                OR
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-sidebar-foreground">
+                  Mr. Reagan
+                </span>
+                <span className="text-[10px] text-sidebar-foreground/60">
+                  Grade 4A
+                </span>
+              </div>
+            </div>
+          </>
         )}
       </SidebarFooter>
     </Sidebar>
