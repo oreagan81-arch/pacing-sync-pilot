@@ -170,10 +170,10 @@ export default function AnnouncementCenterPage() {
           <p className="text-muted-foreground mt-1">Create, auto-generate, and post announcements to Canvas</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Select value={selectedWeekId} onValueChange={setSelectedWeekId}>
+          <Select value={selectedWeekId || '__all__'} onValueChange={v => setSelectedWeekId(v === '__all__' ? '' : v)}>
             <SelectTrigger className="w-40"><SelectValue placeholder="All weeks" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All weeks</SelectItem>
+              <SelectItem value="__all__">All weeks</SelectItem>
               {weeks.map(w => <SelectItem key={w.id} value={w.id}>{w.quarter} Wk {w.week_num}</SelectItem>)}
             </SelectContent>
           </Select>
