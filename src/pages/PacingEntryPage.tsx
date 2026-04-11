@@ -248,6 +248,60 @@ export default function PacingEntryPage({
     }
   };
 
+  const handleSheetImport = async () => {
+    setSheetLoading(true);
+    try {
+      // Step 1: Fetch raw data from Google Sheet via Apps Script
+      const { data: sheetData, error: sheetErr } = await supabase.functions.invoke('sheets-import', {
+        body: { sheetName: `${activeQuarter} Week ${activeWeek}` },
+      });
+      if (sheetErr) throw new Error(sheetErr.message);
+      if (sheetData?.error) throw new Error(sheetData.error);
+
+      const raw = sheetData.raw;
+      if (!raw || !Array.isArray(raw) || raw.length === 0) {
+        toast.info('No data found in sheet');
+        setSheetLoading(false);
+        return;
+      }
+
+      // Step 2: Send raw grid to pacing-parse AI for structured extraction
+      const flatText = raw.map((row: any[]) => row.join('\t')).join('\n');
+      const { data: parsed, error: parseErr } = await supabase.functions.invoke('pacing-parse', {
+        body: { pastedText: flatText },
+      });
+      if (parseErr) throw new Error(parseErr.message);
+      if (parsed?.error) throw new Error(parsed.error);
+
+      // Step 3: Apply parsed rows to weekData
+      const rows = parsed.rows || [];
+      if (rows.length === 0) {
+        toast.info('AI could not parse any rows from sheet data');
+        setSheetLoading(false);
+        return;
+      }
+
+      const newData = initWeekData();
+      for (const row of rows) {
+        if (newData[row.subject]?.[row.day]) {
+          newData[row.subject][row.day] = {
+            type: row.type || '',
+            lesson_num: row.lesson_num || '',
+            in_class: row.in_class || '',
+            at_home: row.at_home || '',
+            resources: '',
+            create_assign: row.type !== '-' && row.type !== 'No Class',
+          };
+        }
+      }
+      setWeekData(newData);
+      toast.success(`Imported ${rows.length} cells from Google Sheets`);
+    } catch (e: any) {
+      toast.error('Sheet import failed', { description: e.message });
+    }
+    setSheetLoading(false);
+  };
+
   const isTestWeek = (subject: string) =>
     DAYS.some((d) => weekData[subject][d].type?.toLowerCase().includes('test'));
 
