@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, RefreshCw, Zap } from 'lucide-react';
+import { Save, RefreshCw, Zap, Sheet, Loader2 } from 'lucide-react';
 import PasteImportDialog from '@/components/PasteImportDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -77,6 +77,7 @@ export default function PacingEntryPage({
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sheetLoading, setSheetLoading] = useState(false);
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
 
   // Compute risk on every change
@@ -247,6 +248,60 @@ export default function PacingEntryPage({
     }
   };
 
+  const handleSheetImport = async () => {
+    setSheetLoading(true);
+    try {
+      // Step 1: Fetch raw data from Google Sheet via Apps Script
+      const { data: sheetData, error: sheetErr } = await supabase.functions.invoke('sheets-import', {
+        body: { sheetName: `${activeQuarter} Week ${activeWeek}` },
+      });
+      if (sheetErr) throw new Error(sheetErr.message);
+      if (sheetData?.error) throw new Error(sheetData.error);
+
+      const raw = sheetData.raw;
+      if (!raw || !Array.isArray(raw) || raw.length === 0) {
+        toast.info('No data found in sheet');
+        setSheetLoading(false);
+        return;
+      }
+
+      // Step 2: Send raw grid to pacing-parse AI for structured extraction
+      const flatText = raw.map((row: any[]) => row.join('\t')).join('\n');
+      const { data: parsed, error: parseErr } = await supabase.functions.invoke('pacing-parse', {
+        body: { pastedText: flatText },
+      });
+      if (parseErr) throw new Error(parseErr.message);
+      if (parsed?.error) throw new Error(parsed.error);
+
+      // Step 3: Apply parsed rows to weekData
+      const rows = parsed.rows || [];
+      if (rows.length === 0) {
+        toast.info('AI could not parse any rows from sheet data');
+        setSheetLoading(false);
+        return;
+      }
+
+      const newData = initWeekData();
+      for (const row of rows) {
+        if (newData[row.subject]?.[row.day]) {
+          newData[row.subject][row.day] = {
+            type: row.type || '',
+            lesson_num: row.lesson_num || '',
+            in_class: row.in_class || '',
+            at_home: row.at_home || '',
+            resources: '',
+            create_assign: row.type !== '-' && row.type !== 'No Class',
+          };
+        }
+      }
+      setWeekData(newData);
+      toast.success(`Imported ${rows.length} cells from Google Sheets`);
+    } catch (e: any) {
+      toast.error('Sheet import failed', { description: e.message });
+    }
+    setSheetLoading(false);
+  };
+
   const isTestWeek = (subject: string) =>
     DAYS.some((d) => weekData[subject][d].type?.toLowerCase().includes('test'));
 
@@ -296,6 +351,11 @@ export default function PacingEntryPage({
         />
 
         <PasteImportDialog onImport={(data) => setWeekData(data)} />
+
+        <Button variant="outline" size="sm" onClick={handleSheetImport} disabled={sheetLoading} className="gap-1.5">
+          {sheetLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sheet className="h-3.5 w-3.5" />}
+          {sheetLoading ? 'Importing...' : 'Google Sheets'}
+        </Button>
 
         <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">
           <Zap className="h-3.5 w-3.5" />
