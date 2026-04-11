@@ -521,7 +521,7 @@ export default function PacingEntryPage({
                             placeholder="In Class"
                             value={cell.in_class}
                             onChange={(e) => updateCell(subject, day, 'in_class', e.target.value)}
-                            className="text-xs min-h-[60px] border-l-2"
+                            className={`text-xs min-h-[60px] border-l-2 ${isTest ? 'font-bold text-red-600' : ''}`}
                             style={{ borderLeftColor: '#0065a7' }}
                             rows={2}
                           />
