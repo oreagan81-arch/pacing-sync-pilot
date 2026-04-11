@@ -17,6 +17,17 @@ import { evaluateWeekRisk } from '@/lib/risk-engine';
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
 
+// Subject name mapping from API keys to our internal names
+const API_SUBJECT_MAP: Record<string, string> = {
+  Math: 'Math',
+  Reading: 'Reading',
+  Spelling: 'Spelling',
+  English: 'Language Arts',
+  'Language Arts': 'Language Arts',
+  History: 'History',
+  Science: 'Science',
+};
+
 const SUBJECT_TYPES: Record<string, string[]> = {
   Math: ['Lesson', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
   Reading: ['Lesson', 'Test', 'Checkout', 'No Class', '-'],
