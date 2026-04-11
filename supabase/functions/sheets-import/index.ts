@@ -15,15 +15,18 @@ serve(async (req) => {
     if (!APPS_SCRIPT_URL)
       throw new Error("GOOGLE_APPS_SCRIPT_URL not configured");
 
-    const { sheetName } = await req.json();
+    const { weekNum, sheetName } = await req.json();
 
-    // Build URL with optional sheet name parameter
+    // Build URL — prefer ?week= param for the new API format
     const url = new URL(APPS_SCRIPT_URL);
+    if (weekNum) url.searchParams.set("week", String(weekNum));
     if (sheetName) url.searchParams.set("sheet", sheetName);
+
+    console.log("Fetching from:", url.toString());
 
     const response = await fetch(url.toString(), {
       method: "GET",
-      redirect: "follow", // Apps Script redirects on deploy
+      redirect: "follow",
     });
 
     if (!response.ok) {
@@ -32,11 +35,10 @@ serve(async (req) => {
     }
 
     const rawData = await response.json();
+    console.log("Raw data keys:", Object.keys(rawData));
 
-    // rawData is a 2D array from the sheet
-    // We'll pass it through to the pacing-parse AI for structured extraction
-    // Or return raw for the client to handle
-    return new Response(JSON.stringify({ raw: rawData }), {
+    // Return the data as-is — the client will handle mapping
+    return new Response(JSON.stringify({ data: rawData }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
