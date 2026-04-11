@@ -352,6 +352,11 @@ export default function PacingEntryPage({
 
         <PasteImportDialog onImport={(data) => setWeekData(data)} />
 
+        <Button variant="outline" size="sm" onClick={handleSheetImport} disabled={sheetLoading} className="gap-1.5">
+          {sheetLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sheet className="h-3.5 w-3.5" />}
+          {sheetLoading ? 'Importing...' : 'Google Sheets'}
+        </Button>
+
         <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">
           <Zap className="h-3.5 w-3.5" />
           Auto-Remind
