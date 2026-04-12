@@ -1,6 +1,6 @@
 /**
- * Canvas HTML generator — pure function.
- * Output is used for BOTH preview and deploy. No exceptions.
+ * THALES OS — Canvas HTML Generator
+ * FIX 2: Added Drive Resource Download Links
  * ALL styling is inline (Canvas RCE strips class attributes).
  * ALL emojis as Unicode escapes.
  */
@@ -67,7 +67,6 @@ ${items}
       });
     }
   }
-  // Also include week-level resources if provided
   if (resources && resources.trim()) {
     resources.split('\n').filter(Boolean).forEach((r) => {
       const trimmed = r.trim();
@@ -98,12 +97,10 @@ ${items}
 
     const row = dayRows[0];
 
-    // No School
     if (row.type === 'X') {
       parts.push(wrapDay(day, `<div style="color:#888;font-style:italic;">No School</div>`));
       continue;
     }
-    // No Class
     if (row.type === 'No Class' || row.type === '-') {
       parts.push(wrapDay(day, `<div style="color:#888;font-style:italic;">No Class</div>`));
       continue;
@@ -130,8 +127,19 @@ ${items}
     <a href="${row.canvas_url}" target="_blank">
       <span style="font-weight:bold;color:#0065a7;">\uD83D\uDCCB ${title}</span>
     </a>
-  </div>
-</div>`;
+  </div>`;
+
+      // FIX 2: Drive Resource Download Link
+      if (row.object_id && row.object_id.trim()) {
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${row.object_id.trim()}`;
+        content += `  <div style="margin-top:6px;">
+    <a href="${downloadUrl}" target="_blank" style="text-decoration:none;">
+      <span style="color:#0065a7;">\u2193 Download Resource</span>
+    </a>
+  </div>`;
+      }
+
+      content += `</div>`;
     }
 
     parts.push(wrapDay(day, content));
