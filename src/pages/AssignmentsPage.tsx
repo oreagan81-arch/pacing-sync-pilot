@@ -1,11 +1,16 @@
+/**
+ * THALES ACADEMIC OS — Assignments Page (v15.0 Stable)
+ * ---------------------------------------------------------
+ * Universal Build: All Grade 4A classroom rules enforced.
+ * Triple Math, Shurley CP Only, Spelling Test Only.
+ */
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Rocket, ExternalLink, ClipboardList, Pencil } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Rocket, ExternalLink, ClipboardList, Loader2, Zap, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
@@ -42,11 +47,20 @@ interface AssignmentRow extends PacingRow {
   points: number;
   gradingType: string;
   omitFromFinal?: boolean;
-  editingTitle: boolean;
-  customTitle: string;
+  isSynthetic?: boolean;
 }
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+const CATEGORY_WEIGHTS: Record<string, string> = {
+  'Math Written Assessments': '40%',
+  'Math Fact Assessments': '20%',
+  'Math Homework/Class Work': '40%',
+  'Assessments': '50%',
+  'Classwork/Homework': '50%',
+  'Check Out': '25%',
+  'Homework': '25%',
+};
 
 export default function AssignmentsPage() {
   const config = useConfig();
@@ -56,7 +70,6 @@ export default function AssignmentsPage() {
   const [rawRows, setRawRows] = useState<PacingRow[]>([]);
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
   const [deployingAll, setDeployingAll] = useState(false);
-  const [editingTitles, setEditingTitles] = useState<Record<string, string>>({});
 
   useEffect(() => {
     supabase.from('weeks').select('id, quarter, week_num, date_range').order('quarter').order('week_num').then(({ data }) => {
@@ -67,13 +80,11 @@ export default function AssignmentsPage() {
   useEffect(() => {
     if (!selectedWeekId) return;
     setSelectedWeek(weeks.find((w) => w.id === selectedWeekId) || null);
-
     supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId).then(({ data }) => {
       if (data) setRawRows(data as PacingRow[]);
     });
   }, [selectedWeekId, weeks]);
 
-  // Build assignment rows with auto-generated titles
   const assignmentRows: AssignmentRow[] = useMemo(() => {
     if (!config) return [];
     const result: AssignmentRow[] = [];
@@ -81,20 +92,27 @@ export default function AssignmentsPage() {
     for (const row of rawRows) {
       if (!row.type || row.type === '-' || row.type === 'X' || row.type === 'No Class') continue;
 
+      // FIX 6: Language Arts — only CP and Test create assignments
+      if (row.subject === 'Language Arts') {
+        const isCP = row.in_class?.toUpperCase().includes('CP') || row.type === 'CP';
+        const isTest = row.type === 'Test';
+        if (!isCP && !isTest) continue;
+      }
+
+      // FIX 8: Spelling — Tests only
+      if (row.subject === 'Spelling' && row.type !== 'Test') continue;
+
       const isNoAssign = config.autoLogic.historyScienceNoAssign && (row.subject === 'History' || row.subject === 'Science');
       const isFriday = row.day === 'Friday';
       const shouldCreate = row.create_assign && !isNoAssign && !isFriday;
 
       if (!shouldCreate) {
-        // Still show as grayed out
         result.push({
           ...row,
           title: '—',
           groupName: '—',
           points: 0,
           gradingType: '—',
-          editingTitle: false,
-          customTitle: '',
         });
         continue;
       }
@@ -102,34 +120,35 @@ export default function AssignmentsPage() {
       const prefix = config.assignmentPrefixes[row.subject] || '';
       const group = resolveAssignmentGroup(row.subject, row.type || 'Lesson');
 
-      // Math Test auto-triples
+      // FIX 7: Math Test auto-triples
       if (row.subject === 'Math' && row.type === 'Test' && config.autoLogic.mathTestTriple) {
         // Test
         result.push({
           ...row,
           title: generateAssignmentTitle('Math', 'Test', row.lesson_num, prefix),
           ...resolveAssignmentGroup('Math', 'Test'),
-          editingTitle: false,
-          customTitle: '',
         });
         // Fact Test
         result.push({
           ...row,
-          id: `${row.id}-fact`,
+          id: `fact_${row.id}`,
           title: generateAssignmentTitle('Math', 'Fact Test', row.lesson_num, prefix),
           ...resolveAssignmentGroup('Math', 'Fact Test'),
-          editingTitle: false,
-          customTitle: '',
+          isSynthetic: true,
         });
-        // Study Guide
-        result.push({
-          ...row,
-          id: `${row.id}-sg`,
-          title: generateAssignmentTitle('Math', 'Study Guide', row.lesson_num, prefix),
-          ...resolveAssignmentGroup('Math', 'Study Guide'),
-          editingTitle: false,
-          customTitle: '',
-        });
+        // Study Guide (day before)
+        const dayIdx = DAYS_ORDER.indexOf(row.day);
+        if (dayIdx > 0) {
+          result.push({
+            ...row,
+            id: `sg_${row.id}`,
+            day: DAYS_ORDER[dayIdx - 1],
+            title: generateAssignmentTitle('Math', 'Study Guide', row.lesson_num, prefix),
+            ...resolveAssignmentGroup('Math', 'Study Guide'),
+            points: 0,
+            isSynthetic: true,
+          });
+        }
         continue;
       }
 
@@ -137,16 +156,14 @@ export default function AssignmentsPage() {
         ...row,
         title: generateAssignmentTitle(row.subject, row.type || 'Lesson', row.lesson_num, prefix),
         ...group,
-        editingTitle: false,
-        customTitle: '',
       });
     }
 
-    // Sort by day order then subject
     result.sort((a, b) => {
       const dayDiff = DAYS_ORDER.indexOf(a.day) - DAYS_ORDER.indexOf(b.day);
       if (dayDiff !== 0) return dayDiff;
-      return a.subject.localeCompare(b.subject);
+      const typePriority: Record<string, number> = { 'Study Guide': 1, 'Fact Test': 2, 'Test': 3 };
+      return (typePriority[a.type || ''] || 0) - (typePriority[b.type || ''] || 0);
     });
 
     return result;
@@ -156,9 +173,6 @@ export default function AssignmentsPage() {
     (r) => r.points > 0 && r.deploy_status !== 'DEPLOYED' && r.title !== '—'
   );
 
-  const getDisplayTitle = (row: AssignmentRow) => editingTitles[row.id] ?? row.title;
-
-  // Deploy single assignment
   const handleDeploy = async (row: AssignmentRow) => {
     if (!config || !selectedWeek) return;
     const courseId = config.courseIds[row.subject];
@@ -167,11 +181,9 @@ export default function AssignmentsPage() {
       return;
     }
 
-    const title = getDisplayTitle(row);
     const realRowId = row.id.includes('-') ? row.id.split('-')[0] : row.id;
-
     setDeploying((p) => ({ ...p, [row.id]: true }));
-    const toastId = toast.loading(`Creating: ${title}\u2026`);
+    const toastId = toast.loading(`Creating: ${row.title}…`);
 
     try {
       const result = await callEdge<{ status: string; assignmentId?: string; canvasUrl?: string }>(
@@ -179,12 +191,12 @@ export default function AssignmentsPage() {
         {
           subject: row.subject,
           courseId,
-          title,
+          title: row.title,
           description: row.at_home || '',
           points: row.points,
           gradingType: row.gradingType,
           assignmentGroup: row.groupName,
-          dueDate: null, // Would come from date_range parsing
+          dueDate: null,
           existingId: row.canvas_assignment_id || null,
           rowId: realRowId,
           weekId: selectedWeek.id,
@@ -199,7 +211,6 @@ export default function AssignmentsPage() {
           : undefined,
       });
 
-      // Refresh rows
       const { data } = await supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId);
       if (data) setRawRows(data as PacingRow[]);
     } catch (e: any) {
@@ -208,39 +219,26 @@ export default function AssignmentsPage() {
     setDeploying((p) => ({ ...p, [row.id]: false }));
   };
 
-  // Deploy all pending
   const handleDeployAll = async () => {
     setDeployingAll(true);
-    const toastId = toast.loading(`Deploying ${pendingRows.length} assignments\u2026`);
+    const toastId = toast.loading(`Deploying ${pendingRows.length} assignments…`);
     let done = 0;
     for (const row of pendingRows) {
       done++;
-      toast.loading(`Deploying (${done}/${pendingRows.length})\u2026`, { id: toastId });
+      toast.loading(`Deploying (${done}/${pendingRows.length})…`, { id: toastId });
       await handleDeploy(row);
     }
     toast.success(`All ${pendingRows.length} assignments deployed!`, { id: toastId });
     setDeployingAll(false);
   };
 
-  const statusBadge = (status: string | null) => {
-    switch (status) {
-      case 'DEPLOYED':
-        return <Badge className="text-[10px] bg-success text-success-foreground">DEPLOYED</Badge>;
-      case 'ERROR':
-        return <Badge variant="destructive" className="text-[10px]">ERROR</Badge>;
-      case 'NO_CHANGE':
-        return <Badge variant="secondary" className="text-[10px]">NO CHANGE</Badge>;
-      default:
-        return <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">PENDING</Badge>;
-    }
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Week Selector */}
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={selectedWeekId} onValueChange={setSelectedWeekId}>
           <SelectTrigger className="w-48">
-            <SelectValue placeholder="Select a week\u2026" />
+            <SelectValue placeholder="Select a week…" />
           </SelectTrigger>
           <SelectContent>
             {weeks.map((w) => (
@@ -282,16 +280,16 @@ export default function AssignmentsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="p-0">
             <div className="overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Subject</TableHead>
-                    <TableHead className="text-xs">Day</TableHead>
-                    <TableHead className="text-xs">Title</TableHead>
-                    <TableHead className="text-xs">Group</TableHead>
+                    <TableHead className="text-xs w-[100px]">Day</TableHead>
+                    <TableHead className="text-xs">Assignment Label</TableHead>
+                    <TableHead className="text-xs">Category</TableHead>
+                    <TableHead className="text-xs">Weighting</TableHead>
                     <TableHead className="text-xs text-center">Points</TableHead>
                     <TableHead className="text-xs text-center">Status</TableHead>
                     <TableHead className="text-xs text-right">Actions</TableHead>
@@ -300,69 +298,46 @@ export default function AssignmentsPage() {
                 <TableBody>
                   {assignmentRows.map((row) => {
                     const isDisabled = row.title === '—';
-                    const isEditing = editingTitles[row.id] !== undefined;
                     return (
-                      <TableRow
-                        key={row.id}
-                        className={isDisabled ? 'opacity-40' : ''}
-                      >
-                        <TableCell className="text-xs font-medium">{row.subject}</TableCell>
-                        <TableCell className="text-xs">{row.day}</TableCell>
+                      <TableRow key={row.id} className={isDisabled ? 'opacity-40' : ''}>
+                        <TableCell className="text-xs font-medium text-primary">{row.day}</TableCell>
                         <TableCell className="text-xs max-w-[250px]">
                           {isDisabled ? (
                             <span className="italic text-muted-foreground">No Assignment (auto-logic)</span>
-                          ) : isEditing ? (
-                            <Input
-                              className="h-7 text-xs"
-                              value={editingTitles[row.id]}
-                              onChange={(e) => setEditingTitles((p) => ({ ...p, [row.id]: e.target.value }))}
-                              onBlur={() => {
-                                if (!editingTitles[row.id]?.trim()) {
-                                  setEditingTitles((p) => {
-                                    const n = { ...p };
-                                    delete n[row.id];
-                                    return n;
-                                  });
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') {
-                                  setEditingTitles((p) => {
-                                    const n = { ...p };
-                                    delete n[row.id];
-                                    return n;
-                                  });
-                                }
-                              }}
-                              autoFocus
-                            />
                           ) : (
-                            <div className="flex items-center gap-1">
-                              <span>{row.title}</span>
-                              <button
-                                onClick={() => setEditingTitles((p) => ({ ...p, [row.id]: row.title }))}
-                                className="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
-                              >
-                                <Pencil className="h-3 w-3 text-muted-foreground" />
-                              </button>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">{row.title}</span>
+                              {row.isSynthetic && (
+                                <span className="text-[9px] text-primary/70 font-mono uppercase tracking-tight flex items-center gap-1">
+                                  <Zap size={10} className="fill-current" /> Auto-Generated
+                                </span>
+                              )}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs">{row.groupName}</TableCell>
-                        <TableCell className="text-xs text-center">{isDisabled ? '—' : row.points}</TableCell>
+                        <TableCell className="text-[10px] text-muted-foreground uppercase tracking-wider font-mono">{row.groupName}</TableCell>
+                        <TableCell>
+                          {!isDisabled && (
+                            <Badge variant="outline" className="text-[9px] font-bold tabular-nums">
+                              {CATEGORY_WEIGHTS[row.groupName] || '—'}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-center font-mono">{isDisabled ? '—' : row.points}</TableCell>
                         <TableCell className="text-xs text-center">
-                          {isDisabled ? '—' : statusBadge(row.deploy_status)}
+                          {isDisabled ? '—' : (
+                            row.deploy_status === 'DEPLOYED'
+                              ? <Badge className="text-[10px] bg-success text-success-foreground">DEPLOYED</Badge>
+                              : row.deploy_status === 'ERROR'
+                                ? <Badge variant="destructive" className="text-[10px]">ERROR</Badge>
+                                : <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">PENDING</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-xs text-right">
                           {!isDisabled && (
                             <div className="flex items-center justify-end gap-1">
                               {row.canvas_url && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => window.open(row.canvas_url!, '_blank')}
-                                >
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(row.canvas_url!, '_blank')}>
                                   <ExternalLink className="h-3 w-3" />
                                 </Button>
                               )}
@@ -373,8 +348,7 @@ export default function AssignmentsPage() {
                                 onClick={() => handleDeploy(row)}
                                 disabled={deploying[row.id]}
                               >
-                                <Rocket className="h-3 w-3" />
-                                {deploying[row.id] ? '\u2026' : 'Deploy'}
+                                {deploying[row.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Rocket className="h-3 w-3" /> Deploy</>}
                               </Button>
                             </div>
                           )}
@@ -395,6 +369,14 @@ export default function AssignmentsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Kernel Info */}
+      <div className="flex items-center gap-3 p-4 bg-accent/50 border border-border rounded-xl">
+        <AlertCircle size={16} className="text-primary shrink-0" />
+        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-relaxed">
+          Kernel Sync: Math Written Tests auto-generate Fact Test + Study Guide. LA uses Shurley CP-only rule. Spelling deploys Tests only.
+        </p>
+      </div>
     </div>
   );
 }
