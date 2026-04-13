@@ -248,8 +248,8 @@ export default function PageBuilderPage() {
           <Button
             variant="deploy"
             size="sm"
-            onClick={handleDeployAll}
-            disabled={deployingAll || !selectedWeekId}
+            onClick={() => setDiffOpen(true)}
+            disabled={deployingAll || !selectedWeekId || deployableSubjects.length === 0}
             className="gap-1.5"
           >
             {deployingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
