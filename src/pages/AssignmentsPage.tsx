@@ -234,11 +234,17 @@ export default function AssignmentsPage() {
           continue;
         }
 
+        // Find matching file for description link
+        const file = findFile(assignment.subject, assignment.lessonNum, assignment.type);
+        const description = file?.canvas_url
+          ? `<p><a href="${file.canvas_url}">${file.canonical_name || 'Download'}</a></p>`
+          : '';
+
         const res = await callEdge<{ status?: string; error?: string; canvasUrl?: string }>('canvas-deploy-assignment', {
           subject: assignment.subject,
           courseId,
           title: assignment.title,
-          description: '',
+          description,
           points: assignment.points,
           gradingType: 'points',
           assignmentGroup: assignment.groupName,
