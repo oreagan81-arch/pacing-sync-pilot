@@ -376,6 +376,7 @@ export default function PageBuilderPage() {
                         <th className="text-left p-2">Type</th>
                         <th className="text-left p-2">Lesson</th>
                         <th className="text-left p-2">In Class</th>
+                        <th className="text-left p-2">At Home</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -388,11 +389,12 @@ export default function PageBuilderPage() {
                             <td className="p-2">{r.type || '\u2014'}</td>
                             <td className="p-2">{r.lesson_num || '\u2014'}</td>
                             <td className="p-2 max-w-[200px] truncate">{r.in_class || '\u2014'}</td>
+                            <td className="p-2 max-w-[200px] truncate text-muted-foreground">{day === 'Friday' ? 'No Homework' : (r.at_home || '\u2014')}</td>
                           </tr>
                         ));
                       })}
                       {subjectRows.length === 0 && (
-                        <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">No pacing data for this subject.</td></tr>
+                        <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">No pacing data for this subject.</td></tr>
                       )}
                     </tbody>
                   </table>
