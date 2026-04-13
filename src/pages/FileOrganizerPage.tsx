@@ -251,7 +251,7 @@ export default function FileOrganizerPage() {
               const base64 = await fileToBase64(file);
               const result = await callEdge<{
                 subject: string; type: string; lesson_num: string; suggested_name: string;
-              }>('file-vision-classify', { image_base64: base64, filename: file.name });
+              }>('file-vision-classify', { image_base64: base64, filename: file.name, mime_type: file.type || undefined });
               await supabase.from('files').insert({
                 original_name: file.name, subject: result.subject, type: result.type,
                 lesson_num: result.lesson_num,
