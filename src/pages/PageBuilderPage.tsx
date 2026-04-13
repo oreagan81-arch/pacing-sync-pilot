@@ -127,7 +127,6 @@ export default function PageBuilderPage() {
   // Deploy single subject page
   const handleDeploy = async (subject: string) => {
     if (!selectedWeek || !config) return;
-    const quarterColor = config.quarterColors[selectedWeek.quarter] || '#0065a7';
     const sRows = subject === 'Reading'
       ? rows.filter((r) => r.subject === 'Reading' || r.subject === 'Spelling')
       : rows.filter((r) => r.subject === subject);
@@ -137,46 +136,30 @@ export default function PageBuilderPage() {
       return;
     }
 
-    const courseId = config.courseIds[subject];
-    if (!courseId) {
-      toast.error(`No course ID for ${subject}`);
-      return;
-    }
-
-    const pageUrl = getPageUrl(subject, selectedWeek.week_num);
-    const pageTitle = `Week ${selectedWeek.week_num} ${subject === 'Reading' ? 'Reading & Spelling' : subject} Agenda`;
-    const bodyHtml = generateCanvasPageHtml({
-      subject: subject === 'Reading' ? 'Reading & Spelling' : subject,
-      rows: sRows,
-      quarter: selectedWeek.quarter,
-      weekNum: selectedWeek.week_num,
-      dateRange: selectedWeek.date_range || '',
-      reminders: selectedWeek.reminders || '',
-      resources: selectedWeek.resources || '',
-      quarterColor,
-    });
-
     setDeploying((p) => ({ ...p, [subject]: true }));
 
     try {
-      const result = await callEdge<DeployResult>('canvas-deploy-page', {
-        subject,
-        courseId,
-        pageUrl,
-        pageTitle,
-        bodyHtml,
-        published: config.autoLogic.pagePublishDefault,
-        weekId: selectedWeek.id,
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DEPLOY_AGENDAS',
+          month: selectedMonth,
+          week: storeWeek,
+          subject,
+          courseId: config.courseIds[subject],
+        }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
 
-      setDeployStatuses((p) => ({ ...p, [subject]: { status: result.status, canvasUrl: result.canvasUrl } }));
-
-      if (result.status === 'NO_CHANGE') {
-        toast.info(`${subject} — no changes`);
-      } else {
-        toast.success(`${subject} deployed!`, {
+      if (result.status === 'success') {
+        setDeployStatuses((p) => ({ ...p, [subject]: { status: 'DEPLOYED', canvasUrl: result.canvasUrl } }));
+        toast.success(`${subject} agenda deployed!`, {
           action: result.canvasUrl ? { label: 'Open', onClick: () => window.open(result.canvasUrl, '_blank') } : undefined,
         });
+      } else {
+        throw new Error(result.error || 'Unknown error');
       }
     } catch (e: any) {
       toast.error(`Deploy failed — ${subject}`, { description: e.message });
