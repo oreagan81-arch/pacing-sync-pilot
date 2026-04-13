@@ -109,8 +109,10 @@ export default function PageBuilderPage() {
           in_class: cell.value || null,
           at_home: null,
           canvas_url: null,
+          canvas_assignment_id: null,
           object_id: null,
           subject,
+          resources: null,
         });
       });
     }
