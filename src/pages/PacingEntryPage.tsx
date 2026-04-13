@@ -275,27 +275,28 @@ export default function PacingEntryPage({
       if (sheetErr) throw new Error(sheetErr.message);
       if (sheetData?.error) throw new Error(sheetData.error);
 
-      const apiData = sheetData.data?.data || sheetData.data;
-      const dates = sheetData.data?.dates;
-      if (!apiData || typeof apiData !== 'object') {
+      const payload = sheetData?.data ?? sheetData;
+      const apiData = payload?.data ?? payload;
+      const dates = apiData?.dates;
+      const subjects = apiData?.subjects;
+
+      if (!subjects || typeof subjects !== 'object') {
         toast.info('No data found in sheet');
         setSheetLoading(false);
         return;
       }
 
-      // Set date range from API dates if available
-      if (dates && Array.isArray(dates) && dates.length >= 2) {
+      if (Array.isArray(dates) && dates.length >= 2) {
         const start = new Date(dates[0]);
         const end = new Date(dates[dates.length - 1]);
         const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         setDateRange(`${fmt(start)}–${fmt(end)}`);
       }
 
-      // Map API response to weekData
       const newData = initWeekData();
       let cellCount = 0;
 
-      for (const [apiSubject, values] of Object.entries(apiData)) {
+      for (const [apiSubject, values] of Object.entries(subjects)) {
         const subject = API_SUBJECT_MAP[apiSubject];
         if (!subject || !newData[subject] || !Array.isArray(values)) continue;
 
@@ -304,10 +305,9 @@ export default function PacingEntryPage({
           if (!day || !newData[subject][day]) return;
 
           const cellVal = String(val ?? '');
-          const isTest = cellVal.toLowerCase().includes('test');
-          const isNoClass = cellVal === '-' || cellVal.toLowerCase() === 'no class';
-
-          // Parse lesson number from value
+          const lowerVal = cellVal.toLowerCase();
+          const isTest = lowerVal.includes('test');
+          const isNoClass = cellVal === '-' || lowerVal === 'no class';
           const numMatch = cellVal.match(/\d+/);
           const lessonNum = numMatch ? numMatch[0] : '';
 
@@ -317,7 +317,7 @@ export default function PacingEntryPage({
             in_class: cellVal,
             at_home: '',
             resources: '',
-            create_assign: !isTest && !isNoClass,
+            create_assign: !isNoClass && day !== 'Friday',
           };
           cellCount++;
         });
