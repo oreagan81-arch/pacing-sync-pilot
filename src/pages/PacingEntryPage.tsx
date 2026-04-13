@@ -195,29 +195,23 @@ export default function PacingEntryPage({
     setSaving(false);
   };
 
-  const handleLoadWeek = async (weekId: string) => {
+  const loadWeekById = useCallback(async (weekId: string, showToast = true) => {
     const week = savedWeeks.find((w) => w.id === weekId);
     if (!week) return;
 
     setActiveQuarter(week.quarter);
     setActiveWeek(week.week_num);
 
-    const { data: weekData2 } = await supabase
-      .from('weeks')
-      .select('*')
-      .eq('id', weekId)
-      .single();
+    const [{ data: weekData2 }, { data: rows }] = await Promise.all([
+      supabase.from('weeks').select('*').eq('id', weekId).single(),
+      supabase.from('pacing_rows').select('*').eq('week_id', weekId),
+    ]);
 
     if (weekData2) {
       setDateRange(weekData2.date_range || '');
       setReminders(weekData2.reminders || '');
       setResources(weekData2.resources || '');
     }
-
-    const { data: rows } = await supabase
-      .from('pacing_rows')
-      .select('*')
-      .eq('week_id', weekId);
 
     if (rows) {
       const newData = initWeekData();
@@ -236,7 +230,20 @@ export default function PacingEntryPage({
       setWeekData(newData);
     }
 
-    toast.success(`Loaded ${week.quarter} Week ${week.week_num}`);
+    if (showToast) {
+      toast.success(`Loaded ${week.quarter} Week ${week.week_num}`);
+    }
+  }, [savedWeeks, setActiveQuarter, setActiveWeek]);
+
+  useEffect(() => {
+    const matchingWeek = savedWeeks.find((week) => week.quarter === activeQuarter && week.week_num === activeWeek);
+    if (matchingWeek) {
+      void loadWeekById(matchingWeek.id, false);
+    }
+  }, [savedWeeks, activeQuarter, activeWeek, loadWeekById]);
+
+  const handleLoadWeek = async (weekId: string) => {
+    await loadWeekById(weekId, true);
   };
 
   const handleAutoRemind = () => {
