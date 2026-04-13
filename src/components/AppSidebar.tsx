@@ -8,6 +8,8 @@ import {
   Activity,
   Settings,
   LayoutDashboard,
+  Eye,
+  ShieldCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -29,8 +31,9 @@ import { Badge } from '@/components/ui/badge';
 const navItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Pacing Entry', url: '/pacing', icon: Database },
+  { title: 'Pacing Viewer', url: '/pacing-viewer', icon: Eye },
   { title: 'Page Builder', url: '/pages', icon: Globe },
-  { title: 'Assignments', url: '/assignments', icon: ClipboardList },
+  { title: 'Assignments', url: '/assignments', icon: ShieldCheck },
   { title: 'Announcements', url: '/announcements', icon: Megaphone },
   { title: 'Newsletter', url: '/newsletter', icon: Mail },
   { title: 'File Organizer', url: '/files', icon: FolderSearch },
@@ -80,7 +83,7 @@ export function AppSidebar({
                 Thales OS
               </span>
               <span className="text-[10px] text-sidebar-foreground/60">
-                v14.1.0
+                v21.0 Command Center
               </span>
             </div>
           )}

@@ -2,6 +2,8 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Badge } from '@/components/ui/badge';
 import { useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useSystemStore } from '@/store/useSystemStore';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -15,10 +17,11 @@ interface DashboardLayoutProps {
 const ROUTE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/pacing': 'Pacing Entry',
+  '/pacing-viewer': 'Pacing Viewer',
   '/pages': 'Page Builder',
-  '/assignments': 'Assignments',
+  '/assignments': 'Assignments Gatekeeper',
   '/announcements': 'Announcements',
-  '/newsletter': 'Newsletter',
+  '/newsletter': 'Newsletter Architect',
   '/files': 'File Organizer',
   '/health': 'Health Monitor',
   '/settings': 'Settings',
@@ -34,6 +37,20 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   const location = useLocation();
   const pageTitle = ROUTE_TITLES[location.pathname] || 'Thales OS';
+  const { systemStatus, fetchHealthCheck } = useSystemStore();
+
+  useEffect(() => {
+    fetchHealthCheck();
+    const interval = setInterval(fetchHealthCheck, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchHealthCheck]);
+
+  const statusColor =
+    systemStatus === 'online'
+      ? 'bg-success'
+      : systemStatus === 'offline'
+        ? 'bg-destructive'
+        : 'bg-warning animate-pulse';
 
   return (
     <SidebarProvider>
@@ -50,10 +67,13 @@ export function DashboardLayout({
             <SidebarTrigger className="mr-4" />
             <h1 className="text-2xl font-extrabold tracking-tight">{pageTitle}</h1>
             <div className="ml-auto flex items-center gap-3">
-              <Badge
-                variant="outline"
-                className="text-xs font-semibold"
-              >
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${statusColor}`} />
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  {systemStatus === 'checking' ? 'Checking…' : systemStatus}
+                </span>
+              </div>
+              <Badge variant="outline" className="text-xs font-semibold">
                 {activeQuarter} · Week {activeWeek}
               </Badge>
             </div>

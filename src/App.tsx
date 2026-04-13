@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 
 import DashboardPage from '@/pages/DashboardPage';
 import PacingEntryPage from '@/pages/PacingEntryPage';
+import PacingViewerPage from '@/pages/PacingViewerPage';
 import PageBuilderPage from '@/pages/PageBuilderPage';
 import AssignmentsPage from '@/pages/AssignmentsPage';
 import AnnouncementCenterPage from '@/pages/AnnouncementCenterPage';
@@ -70,6 +71,7 @@ function AppContent({ config }: { config: AppConfig }) {
               />
             }
           />
+          <Route path="/pacing-viewer" element={<PacingViewerPage />} />
           <Route path="/pages" element={<PageBuilderPage />} />
           <Route path="/assignments" element={<AssignmentsPage />} />
           <Route path="/announcements" element={<AnnouncementCenterPage />} />
