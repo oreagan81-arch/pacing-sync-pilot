@@ -64,6 +64,39 @@ export type Database = {
           },
         ]
       }
+      content_map: {
+        Row: {
+          canonical_name: string | null
+          canvas_file_id: string | null
+          canvas_url: string | null
+          created_at: string | null
+          id: string
+          lesson_ref: string
+          subject: string
+          type: string | null
+        }
+        Insert: {
+          canonical_name?: string | null
+          canvas_file_id?: string | null
+          canvas_url?: string | null
+          created_at?: string | null
+          id?: string
+          lesson_ref: string
+          subject: string
+          type?: string | null
+        }
+        Update: {
+          canonical_name?: string | null
+          canvas_file_id?: string | null
+          canvas_url?: string | null
+          created_at?: string | null
+          id?: string
+          lesson_ref?: string
+          subject?: string
+          type?: string | null
+        }
+        Relationships: []
+      }
       deploy_log: {
         Row: {
           action: string | null
