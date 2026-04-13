@@ -255,6 +255,17 @@ export default function PageBuilderPage() {
         </div>
       </div>
 
+      <SafetyDiffModal
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        month={selectedMonth}
+        week={storeWeek}
+        action="DEPLOY_AGENDAS"
+        itemCount={deployableSubjects.length}
+        items={deployableSubjects.map(s => ({ label: `${s === 'Reading' ? 'Reading & Spelling' : s} Agenda`, subject: s }))}
+        onApprove={handleDeployAll}
+      />
+
       {!selectedWeekId ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
