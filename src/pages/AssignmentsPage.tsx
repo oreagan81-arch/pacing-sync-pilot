@@ -12,11 +12,11 @@ import { Rocket, Loader2, Zap, AlertCircle, ArrowRightLeft, ShieldCheck } from '
 import { toast } from 'sonner';
 import { useSystemStore, type PacingCell } from '@/store/useSystemStore';
 import { useConfig } from '@/lib/config';
+import { callEdge } from '@/lib/edge';
 import SafetyDiffModal from '@/components/SafetyDiffModal';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'];
-const GAS_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
 
 interface SimulatedAssignment {
   id: string;
@@ -178,23 +178,23 @@ export default function AssignmentsPage() {
   const handleDeploy = async () => {
     setDeploying(true);
     try {
-      const res = await fetch(GAS_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        body: JSON.stringify({
-          action: 'DEPLOY_ASSIGNMENTS',
-          month: selectedMonth,
-          week: selectedWeek,
-          assignments: simulated.map(s => ({
-            title: s.title,
-            subject: s.subject,
-            groupName: s.groupName,
-            points: s.points,
-            day: s.day,
-          })),
-        }),
+      const result = await callEdge<{ status?: string; error?: string }>('gas-dispatch', {
+        action: 'DEPLOY_ASSIGNMENTS',
+        month: selectedMonth,
+        week: selectedWeek,
+        assignments: simulated.map(s => ({
+          title: s.title,
+          subject: s.subject,
+          groupName: s.groupName,
+          points: s.points,
+          day: s.day,
+        })),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (result.status !== 'success') {
+        throw new Error(result.error || 'Deployment failed');
+      }
+
       toast.success(`Deployed ${simulated.length} assignments!`);
     } catch (e: any) {
       toast.error('Deployment failed', { description: e.message });
