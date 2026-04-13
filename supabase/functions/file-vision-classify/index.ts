@@ -43,12 +43,21 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image_base64, filename } = await req.json();
+    const { image_base64, filename, mime_type } = await req.json();
     if (!image_base64) {
       return new Response(JSON.stringify({ error: "Missing image_base64" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Detect mime type from filename or explicit param
+    let detectedMime = mime_type || "image/png";
+    if (!mime_type && filename) {
+      const ext = filename.split(".").pop()?.toLowerCase();
+      if (ext === "pdf") detectedMime = "application/pdf";
+      else if (ext === "jpg" || ext === "jpeg") detectedMime = "image/jpeg";
+      else if (ext === "webp") detectedMime = "image/webp";
     }
 
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -87,7 +96,7 @@ Use the classify_file tool to return your answer.`;
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/png;base64,${image_base64}`,
+                  url: `data:${detectedMime};base64,${image_base64}`,
                 },
               },
             ],
