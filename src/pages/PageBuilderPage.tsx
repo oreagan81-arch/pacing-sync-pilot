@@ -179,19 +179,13 @@ export default function PageBuilderPage() {
     setDeploying((p) => ({ ...p, [subject]: true }));
 
     try {
-      const res = await fetch(GAS_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        body: JSON.stringify({
-          action: 'DEPLOY_AGENDAS',
-          month: selectedMonth,
-          week: storeWeek,
-          subject,
-          courseId: config.courseIds[subject],
-        }),
+      const result = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('gas-dispatch', {
+        action: 'DEPLOY_AGENDAS',
+        month: selectedMonth,
+        week: storeWeek,
+        subject,
+        courseId: config.courseIds[subject],
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
 
       if (result.status === 'success') {
         setDeployStatuses((p) => ({ ...p, [subject]: { status: 'DEPLOYED', canvasUrl: result.canvasUrl } }));
