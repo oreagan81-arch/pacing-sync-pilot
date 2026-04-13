@@ -213,7 +213,7 @@ export default function AssignmentsPage() {
     }
 
     return result.sort((a, b) => a.dayIndex - b.dayIndex);
-  }, [pacingData, config, historyRedirect, files]);
+  }, [pacingData, config, historyRedirect, contentMap]);
 
   const orphanCount = simulated.filter(s => s.isOrphan).length;
   const deployable = simulated.filter(s => !s.isOrphan);
