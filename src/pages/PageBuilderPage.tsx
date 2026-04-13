@@ -38,14 +38,13 @@ export default function PageBuilderPage() {
   const [weeks, setWeeks] = useState<WeekOption[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState<string>('');
   const [selectedWeek, setSelectedWeek] = useState<WeekOption | null>(null);
-  const [rows, setRows] = useState<CanvasPageRow[]>([]);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
-  const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
+  const { selectedMonth, selectedWeek: storeWeek, pacingData, fetchPacingData } = useSystemStore();
 
   // Realtime deploy notifications — update statuses live
   const handleRealtimeEvent = useCallback((event: any) => {
@@ -65,15 +64,16 @@ export default function PageBuilderPage() {
     });
   }, []);
 
-  // Load pacing rows when week changes
+  // Load week details + fetch GAS pacing data when week changes
   useEffect(() => {
     if (!selectedWeekId) return;
     const week = weeks.find((w) => w.id === selectedWeekId);
     setSelectedWeek(week || null);
 
-    supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId).then(({ data }) => {
-      if (data) setRows(data as unknown as CanvasPageRow[]);
-    });
+    // Fetch GAS pacing data for this week
+    if (week) {
+      fetchPacingData(week.quarter, week.week_num);
+    }
 
     // Load deploy log for this week's pages
     supabase
@@ -93,7 +93,31 @@ export default function PageBuilderPage() {
           setDeployStatuses(statuses);
         }
       });
-  }, [selectedWeekId, weeks]);
+  }, [selectedWeekId, weeks, fetchPacingData]);
+
+  // Build CanvasPageRow[] from GAS pacing data
+  const rows: CanvasPageRow[] = useMemo(() => {
+    if (!pacingData) return [];
+    const result: CanvasPageRow[] = [];
+    const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    for (const [subject, cells] of Object.entries(pacingData.subjects)) {
+      cells.forEach((cell, idx) => {
+        result.push({
+          day: DAYS[idx],
+          type: cell.isTest ? 'Test' : cell.isReview ? 'Review' : 'Lesson',
+          lesson_num: cell.lessonNum || null,
+          in_class: cell.value || null,
+          at_home: null,
+          canvas_url: null,
+          canvas_assignment_id: null,
+          object_id: null,
+          subject,
+          resources: null,
+        });
+      });
+    }
+    return result;
+  }, [pacingData]);
 
   // Get rows for active subject (Reading tab merges Reading + Spelling)
   const subjectRows = useMemo(() => {
@@ -141,7 +165,7 @@ export default function PageBuilderPage() {
     try {
       const res = await fetch(GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        redirect: 'follow',
         body: JSON.stringify({
           action: 'DEPLOY_AGENDAS',
           month: selectedMonth,

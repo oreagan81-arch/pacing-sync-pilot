@@ -180,7 +180,7 @@ export default function AssignmentsPage() {
     try {
       const res = await fetch(GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        redirect: 'follow',
         body: JSON.stringify({
           action: 'DEPLOY_ASSIGNMENTS',
           month: selectedMonth,
