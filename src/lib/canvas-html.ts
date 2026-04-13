@@ -1,8 +1,7 @@
 /**
  * THALES OS — Canvas HTML Generator
- * FIX 2: Added Drive Resource Download Links
- * ALL styling is inline (Canvas RCE strips class attributes).
- * ALL emojis as Unicode escapes.
+ * Matches the official Canvas Agenda Page template exactly.
+ * Uses Canvas RCE-compatible classes and inline styles.
  */
 
 import { applyBrevity } from './assignment-logic';
@@ -32,32 +31,38 @@ export interface CanvasPageParams {
 }
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const BLOCK_IDS: Record<string, string> = {
+  Monday: 'kl_custom_block_3',
+  Tuesday: 'kl_custom_block_4',
+  Wednesday: 'kl_custom_block_6',
+  Thursday: 'kl_custom_block_2',
+  Friday: 'kl_custom_block_1',
+};
 
 export function generateCanvasPageHtml(params: CanvasPageParams): string {
   const { subject, rows, quarter, weekNum, dateRange, reminders, resources, quarterColor } = params;
   const parts: string[] = [];
 
   // 1. BANNER
-  parts.push(`<div style="background:${quarterColor};padding:24px 20px;border-radius:8px;margin-bottom:16px;">
-  <div style="color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;">${subject}</div>
-  <div style="color:#fff;font-size:24px;font-weight:bold;margin-bottom:4px;">Weekly Agenda</div>
-  <div style="color:rgba(255,255,255,0.85);font-size:14px;">${quarter}, Week ${weekNum} | ${dateRange}</div>
-</div>`);
+  parts.push(`<div id="kl_wrapper_3" class="kl_circle_left kl_wrapper" style="border-style: none;">
+    <div id="kl_banner" class="">
+        <h2 class="" style="color: #ffffff; background-color: ${quarterColor}; text-align: center;"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${quarterColor};">${subject} \u2014 Weekly Agenda</span></h2>
+        <p class="kl_subtitle">${quarter}, Week ${weekNum} | ${dateRange}</p>
+    </div>`);
 
   // 2. REMINDERS (omit if empty)
   if (reminders && reminders.trim()) {
     const items = reminders.split('\n').filter(Boolean).map(
-      (r) => `    <li style="margin-bottom:4px;">${r.trim()}</li>`
+      (r) => `        <p>${r.trim()}</p>`
     ).join('\n');
-    parts.push(`<div style="background:#c51062;padding:16px 20px;border-radius:8px;margin-bottom:16px;">
-  <div style="color:#fff;font-weight:bold;font-size:14px;margin-bottom:8px;">\uD83D\uDCE2 Reminders</div>
-  <ul style="color:#fff;margin:0;padding-left:20px;">
+    parts.push(`    <div id="kl_custom_block_0" class="">
+        <h3 class="" style="background-color: #c51062; color: #ffffff; border-color: #c51062;"><i class="fas fa-exclamation" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Reminders</h3>
 ${items}
-  </ul>
-</div>`);
+        <p>&nbsp;</p>
+    </div>`);
   }
 
-  // 3. RESOURCES — auto-populated from per-day pacing row resources fields
+  // 3. RESOURCES — aggregated from per-day rows + week metadata
   const allResources: string[] = [];
   for (const row of rows) {
     if (row.resources && row.resources.trim()) {
@@ -78,16 +83,15 @@ ${items}
     const items = allResources.map((trimmed) => {
       if (trimmed.startsWith('http')) {
         const label = trimmed.split('/').pop() || 'Resource';
-        return `  <div style="margin-bottom:6px;">
-    <a href="${trimmed}" target="_blank"><span style="color:#0065a7;">\u2193 ${label}</span></a>
-  </div>`;
+        return `        <p><a href="${trimmed}" target="_blank">${label}</a></p>`;
       }
-      return `  <div style="margin-bottom:6px;"><span style="color:#333;">${trimmed}</span></div>`;
+      return `        <p>${trimmed}</p>`;
     }).join('\n');
-    parts.push(`<div style="background:#f8f9fa;padding:16px 20px;border-radius:8px;margin-bottom:16px;border:1px solid #e0e0e0;">
-  <div style="font-weight:bold;font-size:14px;color:#333;margin-bottom:10px;">\uD83D\uDCC2 Resources</div>
+    parts.push(`    <div id="kl_custom_block_5" class="">
+        <h3 style="background-color: #00c0a5; color: #ffffff; border-color: #00c0a5;"><i class="fas fa-question" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Resources</h3>
 ${items}
-</div>`);
+        <p>&nbsp;</p>
+    </div>`);
   }
 
   // 4. DAILY BLOCKS
@@ -95,66 +99,73 @@ ${items}
     const dayRows = rows.filter((r) => r.day === day);
     if (dayRows.length === 0) continue;
 
+    const blockId = BLOCK_IDS[day];
     const row = dayRows[0];
 
-    if (row.type === 'X') {
-      parts.push(wrapDay(day, `<div style="color:#888;font-style:italic;">No School</div>`));
-      continue;
-    }
-    if (row.type === 'No Class' || row.type === '-') {
-      parts.push(wrapDay(day, `<div style="color:#888;font-style:italic;">No Class</div>`));
+    // No Class / No School
+    if (row.type === 'X' || row.type === 'No Class' || row.type === '-') {
+      const label = row.type === 'X' ? 'No School' : 'No Class';
+      parts.push(`    <div id="${blockId}" class="">
+        <h3 class="" style="background-color: #0065a7; color: #ffffff; border-color: #0065a7;"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <p><em>${label}</em></p>
+        <p>&nbsp;</p>
+    </div>`);
       continue;
     }
 
-    let content = '';
-
-    // IN CLASS
+    // Build In Class content
     const brevityText = applyBrevity(row.subject, row.lesson_num, row.in_class || '');
-    content += `<div style="margin-bottom:12px;">
-  <div style="font-size:11px;text-transform:uppercase;font-weight:bold;color:#666;letter-spacing:1px;margin-bottom:6px;">In Class</div>
-  <div style="color:#333;">${brevityText}</div>
-</div>`;
+    // For multiple subjects on the same day (Reading tab merges Reading + Spelling)
+    const extraRows = dayRows.slice(1);
+    const extraInClass = extraRows
+      .map((r) => `        <p>${applyBrevity(r.subject, r.lesson_num, r.in_class || '')}</p>`)
+      .join('\n');
 
-    // AT HOME — OMIT if Friday OR no Canvas assignment URL
+    // Determine if there's homework
     const isFriday = day === 'Friday';
-    const hasCanvasUrl = row.canvas_url && row.canvas_url.trim();
+    const hasAtHome = !isFriday && row.at_home && row.at_home.trim();
 
-    if (!isFriday && hasCanvasUrl) {
-      const title = row.at_home || `Lesson ${row.lesson_num || ''}`;
-      content += `<div style="background:#f0f4ff;padding:12px 14px;border-radius:6px;border-left:3px solid #0065a7;margin-top:8px;">
-  <div style="font-size:11px;text-transform:uppercase;font-weight:bold;color:#0065a7;letter-spacing:1px;margin-bottom:8px;">At Home</div>
-  <div>
-    <a href="${row.canvas_url}" target="_blank">
-      <span style="font-weight:bold;color:#0065a7;">\uD83D\uDCCB ${title}</span>
-    </a>
-  </div>`;
+    let dayHtml = `    <div id="${blockId}" class="">
+        <h3 class="" style="background-color: #0065a7; color: #ffffff; border-color: #0065a7;"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <h4 class="kl_solid_border" style="color: #ffffff; background-color: #333333; padding-left: 40px; border-width: 0px; width: 60%;"><strong>In Class</strong></h4>
+        <p>${brevityText}</p>`;
 
-      // FIX 2: Drive Resource Download Link
-      if (row.object_id && row.object_id.trim()) {
-        const downloadUrl = `https://drive.google.com/uc?export=download&id=${row.object_id.trim()}`;
-        content += `  <div style="margin-top:6px;">
-    <a href="${downloadUrl}" target="_blank" style="text-decoration:none;">
-      <span style="color:#0065a7;">\u2193 Download Resource</span>
-    </a>
-  </div>`;
-      }
-
-      content += `</div>`;
+    if (extraInClass) {
+      dayHtml += `\n${extraInClass}`;
     }
 
-    parts.push(wrapDay(day, content));
+    // AT HOME section — only if there's homework and it's not Friday
+    if (hasAtHome) {
+      const atHomeText = row.at_home!.trim();
+      dayHtml += `
+        <p>&nbsp;</p>
+        <h4 class="kl_solid_border" style="color: #ffffff; background-color: #333333; padding-left: 40px; border-width: 0px; width: 60%;"><strong>At Home</strong></h4>
+        <p>${atHomeText}</p>`;
+    }
+
+    // Extra rows at-home (e.g. Spelling homework on Reading tab)
+    for (const er of extraRows) {
+      if (!isFriday && er.at_home && er.at_home.trim()) {
+        if (!hasAtHome) {
+          // Need to add the At Home header if the primary row didn't have one
+          dayHtml += `
+        <p>&nbsp;</p>
+        <h4 class="kl_solid_border" style="color: #ffffff; background-color: #333333; padding-left: 40px; border-width: 0px; width: 60%;"><strong>At Home</strong></h4>`;
+        }
+        dayHtml += `
+        <p>${er.at_home.trim()}</p>`;
+      }
+    }
+
+    dayHtml += `
+        <p>&nbsp;</p>
+    </div>`;
+
+    parts.push(dayHtml);
   }
 
-  return parts.join('\n\n');
-}
+  // Close wrapper
+  parts.push(`</div>`);
 
-function wrapDay(day: string, content: string): string {
-  return `<div style="margin-bottom:16px;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;">
-  <div style="background:#0065a7;padding:10px 16px;">
-    <span style="color:#fff;font-weight:bold;font-size:15px;">${day}</span>
-  </div>
-  <div style="padding:16px;">
-    ${content}
-  </div>
-</div>`;
+  return parts.join('\n');
 }
