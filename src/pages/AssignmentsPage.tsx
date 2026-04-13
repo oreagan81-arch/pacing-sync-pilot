@@ -1,61 +1,39 @@
 /**
- * THALES ACADEMIC OS — Assignments Page (v15.0 Stable)
- * ---------------------------------------------------------
- * Universal Build: All Grade 4A classroom rules enforced.
- * Triple Math, Shurley CP Only, Spelling Test Only.
+ * THALES OS — Assignments Gatekeeper (v21.0)
+ * Simulation view: previews what will be created before POST to GAS.
  */
-import { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useEffect, useMemo, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Rocket, ExternalLink, ClipboardList, Loader2, Zap, AlertCircle } from 'lucide-react';
+import { Rocket, Loader2, Zap, AlertCircle, ArrowRightLeft, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { useSystemStore, type PacingCell } from '@/store/useSystemStore';
 import { useConfig } from '@/lib/config';
-import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignment-logic';
-import { callEdge } from '@/lib/edge';
+import SafetyDiffModal from '@/components/SafetyDiffModal';
 
-interface PacingRow {
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'];
+const GAS_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
+
+interface SimulatedAssignment {
   id: string;
-  week_id: string;
-  subject: string;
   day: string;
-  type: string | null;
-  lesson_num: string | null;
-  in_class: string | null;
-  at_home: string | null;
-  resources: string | null;
-  create_assign: boolean | null;
-  object_id: string | null;
-  canvas_assignment_id: string | null;
-  canvas_url: string | null;
-  deploy_status: string | null;
-}
-
-interface WeekOption {
-  id: string;
-  quarter: string;
-  week_num: number;
-  date_range: string | null;
-}
-
-interface AssignmentRow extends PacingRow {
+  dayIndex: number;
+  subject: string;
   title: string;
   groupName: string;
   points: number;
-  gradingType: string;
-  omitFromFinal?: boolean;
-  isSynthetic?: boolean;
+  isSynthetic: boolean;
+  type: string;
 }
 
-const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
 const CATEGORY_WEIGHTS: Record<string, string> = {
-  'Math Written Assessments': '40%',
-  'Math Fact Assessments': '20%',
-  'Math Homework/Class Work': '40%',
+  'Written Assessments': '40%',
+  'Fact Assessments': '20%',
+  'Homework/Class Work': '40%',
   'Assessments': '50%',
   'Classwork/Homework': '50%',
   'Check Out': '25%',
@@ -64,305 +42,282 @@ const CATEGORY_WEIGHTS: Record<string, string> = {
 
 export default function AssignmentsPage() {
   const config = useConfig();
-  const [weeks, setWeeks] = useState<WeekOption[]>([]);
-  const [selectedWeekId, setSelectedWeekId] = useState('');
-  const [selectedWeek, setSelectedWeek] = useState<WeekOption | null>(null);
-  const [rawRows, setRawRows] = useState<PacingRow[]>([]);
-  const [deploying, setDeploying] = useState<Record<string, boolean>>({});
-  const [deployingAll, setDeployingAll] = useState(false);
+  const {
+    selectedMonth, selectedWeek, pacingData, isLoading,
+    setSelectedMonth, setSelectedWeek, fetchPacingData,
+  } = useSystemStore();
+
+  const [deploying, setDeploying] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
 
   useEffect(() => {
-    supabase.from('weeks').select('id, quarter, week_num, date_range').order('quarter').order('week_num').then(({ data }) => {
-      if (data) setWeeks(data);
-    });
-  }, []);
+    fetchPacingData(selectedMonth, selectedWeek);
+  }, [selectedMonth, selectedWeek, fetchPacingData]);
 
-  useEffect(() => {
-    if (!selectedWeekId) return;
-    setSelectedWeek(weeks.find((w) => w.id === selectedWeekId) || null);
-    supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId).then(({ data }) => {
-      if (data) setRawRows(data as PacingRow[]);
-    });
-  }, [selectedWeekId, weeks]);
+  // Check for History/Science redirect
+  const historyRedirect = useMemo(() => {
+    if (!pacingData) return null;
+    const historyCells = pacingData.subjects['History'];
+    const scienceCells = pacingData.subjects['Science'];
+    const allHistoryDash = historyCells?.every(c => c.isNoClass) ?? true;
+    const allScienceDash = scienceCells?.every(c => c.isNoClass) ?? true;
+    if (allHistoryDash && !allScienceDash) return { from: 'History', to: 'Science' };
+    if (allScienceDash && !allHistoryDash) return { from: 'Science', to: 'History' };
+    return null;
+  }, [pacingData]);
 
-  const assignmentRows: AssignmentRow[] = useMemo(() => {
-    if (!config) return [];
-    const result: AssignmentRow[] = [];
+  // Build simulated assignments from pacing data
+  const simulated: SimulatedAssignment[] = useMemo(() => {
+    if (!pacingData || !config) return [];
+    const result: SimulatedAssignment[] = [];
+    let idCounter = 0;
 
-    for (const row of rawRows) {
-      if (!row.type || row.type === '-' || row.type === 'X' || row.type === 'No Class') continue;
+    for (const subject of SUBJECTS) {
+      const cells = pacingData.subjects[subject];
+      if (!cells) continue;
 
-      // FIX 6: Language Arts — only CP and Test create assignments
-      if (row.subject === 'Language Arts') {
-        const isCP = row.in_class?.toUpperCase().includes('CP') || row.type === 'CP';
-        const isTest = row.type === 'Test';
-        if (!isCP && !isTest) continue;
-      }
+      // History/Science redirect: skip the empty one
+      if (historyRedirect && subject === historyRedirect.from) continue;
 
-      // FIX 8: Spelling — Tests only
-      if (row.subject === 'Spelling' && row.type !== 'Test') continue;
+      const prefix = config.assignmentPrefixes[subject] || '';
 
-      const isNoAssign = config.autoLogic.historyScienceNoAssign && (row.subject === 'History' || row.subject === 'Science');
-      const isFriday = row.day === 'Friday';
-      const shouldCreate = row.create_assign && !isNoAssign && !isFriday;
+      cells.forEach((cell: PacingCell, dayIdx: number) => {
+        const day = DAYS[dayIdx];
 
-      if (!shouldCreate) {
-        result.push({
-          ...row,
-          title: '—',
-          groupName: '—',
-          points: 0,
-          gradingType: '—',
-        });
-        continue;
-      }
+        // Friday exception
+        if (dayIdx === 4) return;
 
-      const prefix = config.assignmentPrefixes[row.subject] || '';
-      const group = resolveAssignmentGroup(row.subject, row.type || 'Lesson');
+        if (cell.isNoClass || !cell.value || cell.value === '-') return;
 
-      // FIX 7: Math Test auto-triples
-      if (row.subject === 'Math' && row.type === 'Test' && config.autoLogic.mathTestTriple) {
-        // Test
-        result.push({
-          ...row,
-          title: generateAssignmentTitle('Math', 'Test', row.lesson_num, prefix),
-          ...resolveAssignmentGroup('Math', 'Test'),
-        });
-        // Fact Test
-        result.push({
-          ...row,
-          id: `fact_${row.id}`,
-          title: generateAssignmentTitle('Math', 'Fact Test', row.lesson_num, prefix),
-          ...resolveAssignmentGroup('Math', 'Fact Test'),
-          isSynthetic: true,
-        });
-        // Study Guide (day before)
-        const dayIdx = DAYS_ORDER.indexOf(row.day);
-        if (dayIdx > 0) {
+        // Shurley English Filter: only CP or Test
+        if (subject === 'Language Arts') {
+          const upper = cell.value.toUpperCase();
+          const isCP = upper.includes('CP');
+          const isTest = cell.isTest;
+          if (!isCP && !isTest) return;
+        }
+
+        // Spelling Filter: only Test
+        if (subject === 'Spelling' && !cell.isTest) return;
+
+        // Math Triple Sequence
+        if (subject === 'Math' && cell.isTest) {
+          const num = cell.lessonNum;
+          // Written Test
           result.push({
-            ...row,
-            id: `sg_${row.id}`,
-            day: DAYS_ORDER[dayIdx - 1],
-            title: generateAssignmentTitle('Math', 'Study Guide', row.lesson_num, prefix),
-            ...resolveAssignmentGroup('Math', 'Study Guide'),
-            points: 0,
-            isSynthetic: true,
+            id: `sim_${idCounter++}`,
+            day, dayIndex: dayIdx, subject,
+            title: `${prefix} Written Test ${num}`,
+            groupName: 'Written Assessments',
+            points: 100, isSynthetic: false, type: 'Test',
           });
+          // Fact Test
+          result.push({
+            id: `sim_${idCounter++}`,
+            day, dayIndex: dayIdx, subject,
+            title: `${prefix} Fact Test ${num}`,
+            groupName: 'Fact Assessments',
+            points: 100, isSynthetic: true, type: 'Fact Test',
+          });
+          // Study Guide (Day N-1)
+          if (dayIdx > 0) {
+            result.push({
+              id: `sim_${idCounter++}`,
+              day: DAYS[dayIdx - 1], dayIndex: dayIdx - 1, subject,
+              title: `${prefix} Study Guide ${num}`,
+              groupName: 'Homework/Class Work',
+              points: 0, isSynthetic: true, type: 'Study Guide',
+            });
+          }
+          return;
         }
-        continue;
-      }
 
-      result.push({
-        ...row,
-        title: generateAssignmentTitle(row.subject, row.type || 'Lesson', row.lesson_num, prefix),
-        ...group,
+        // Normal assignment
+        let title = '';
+        let groupName = 'Assignments';
+        let points = 100;
+
+        if (subject === 'Math') {
+          const num = cell.lessonNum;
+          const isEven = num ? parseInt(num) % 2 === 0 : false;
+          title = `${prefix} ${isEven ? 'Evens' : 'Odds'} HW — Lesson ${num}`;
+          groupName = 'Homework/Class Work';
+        } else if (subject === 'Reading') {
+          title = cell.isTest
+            ? `${prefix} Mastery Test ${cell.lessonNum}`
+            : `${prefix} Reading HW ${cell.lessonNum}`;
+          groupName = cell.isTest ? 'Assessments' : 'Homework';
+        } else if (subject === 'Spelling') {
+          title = `${prefix} Spelling Test ${cell.lessonNum}`;
+          groupName = 'Assessments';
+        } else if (subject === 'Language Arts') {
+          const upper = cell.value.toUpperCase();
+          if (cell.isTest) {
+            title = `${prefix} Shurley Test`;
+            groupName = 'Assessments';
+          } else if (upper.includes('CP')) {
+            title = `${prefix} Classroom Practice ${cell.lessonNum}`;
+            groupName = 'Classwork/Homework';
+          }
+        } else {
+          title = `${subject} — ${cell.value}`;
+        }
+
+        result.push({
+          id: `sim_${idCounter++}`,
+          day, dayIndex: dayIdx, subject,
+          title, groupName, points,
+          isSynthetic: false, type: cell.isTest ? 'Test' : 'Lesson',
+        });
       });
     }
 
-    result.sort((a, b) => {
-      const dayDiff = DAYS_ORDER.indexOf(a.day) - DAYS_ORDER.indexOf(b.day);
-      if (dayDiff !== 0) return dayDiff;
-      const typePriority: Record<string, number> = { 'Study Guide': 1, 'Fact Test': 2, 'Test': 3 };
-      return (typePriority[a.type || ''] || 0) - (typePriority[b.type || ''] || 0);
-    });
+    return result.sort((a, b) => a.dayIndex - b.dayIndex);
+  }, [pacingData, config, historyRedirect]);
 
-    return result;
-  }, [rawRows, config]);
-
-  const pendingRows = assignmentRows.filter(
-    (r) => r.points > 0 && r.deploy_status !== 'DEPLOYED' && r.title !== '—'
-  );
-
-  const handleDeploy = async (row: AssignmentRow) => {
-    if (!config || !selectedWeek) return;
-    const courseId = config.courseIds[row.subject];
-    if (!courseId) {
-      toast.error(`No course ID for ${row.subject}`);
-      return;
-    }
-
-    const realRowId = row.id.includes('-') ? row.id.split('-')[0] : row.id;
-    setDeploying((p) => ({ ...p, [row.id]: true }));
-    const toastId = toast.loading(`Creating: ${row.title}…`);
-
+  const handleDeploy = async () => {
+    setDeploying(true);
     try {
-      const result = await callEdge<{ status: string; assignmentId?: string; canvasUrl?: string }>(
-        'canvas-deploy-assignment',
-        {
-          subject: row.subject,
-          courseId,
-          title: row.title,
-          description: row.at_home || '',
-          points: row.points,
-          gradingType: row.gradingType,
-          assignmentGroup: row.groupName,
-          dueDate: null,
-          existingId: row.canvas_assignment_id || null,
-          rowId: realRowId,
-          weekId: selectedWeek.id,
-          omitFromFinal: row.omitFromFinal || false,
-        }
-      );
-
-      toast.success('Assignment created!', {
-        id: toastId,
-        action: result.canvasUrl
-          ? { label: 'Open', onClick: () => window.open(result.canvasUrl, '_blank') }
-          : undefined,
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DEPLOY_ASSIGNMENTS',
+          month: selectedMonth,
+          week: selectedWeek,
+          assignments: simulated.map(s => ({
+            title: s.title,
+            subject: s.subject,
+            groupName: s.groupName,
+            points: s.points,
+            day: s.day,
+          })),
+        }),
       });
-
-      const { data } = await supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId);
-      if (data) setRawRows(data as PacingRow[]);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.success(`Deployed ${simulated.length} assignments!`);
     } catch (e: any) {
-      toast.error('Deploy failed', { id: toastId, description: e.message });
+      toast.error('Deployment failed', { description: e.message });
     }
-    setDeploying((p) => ({ ...p, [row.id]: false }));
-  };
-
-  const handleDeployAll = async () => {
-    setDeployingAll(true);
-    const toastId = toast.loading(`Deploying ${pendingRows.length} assignments…`);
-    let done = 0;
-    for (const row of pendingRows) {
-      done++;
-      toast.loading(`Deploying (${done}/${pendingRows.length})…`, { id: toastId });
-      await handleDeploy(row);
-    }
-    toast.success(`All ${pendingRows.length} assignments deployed!`, { id: toastId });
-    setDeployingAll(false);
+    setDeploying(false);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Week Selector */}
+      {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
-        <Select value={selectedWeekId} onValueChange={setSelectedWeekId}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Select a week…" />
-          </SelectTrigger>
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {weeks.map((w) => (
-              <SelectItem key={w.id} value={w.id}>
-                {w.quarter} Week {w.week_num}
-              </SelectItem>
+            {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
+              <SelectItem key={q} value={q}>{q}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        {selectedWeek && (
-          <span className="text-sm text-muted-foreground">{selectedWeek.date_range}</span>
-        )}
+        <Select value={String(selectedWeek)} onValueChange={(v) => setSelectedWeek(Number(v))}>
+          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 12 }, (_, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>Week {i + 1}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <div className="ml-auto flex gap-2">
-          {pendingRows.length > 0 && (
-            <Badge variant="outline" className="text-xs">
-              {pendingRows.length} pending
-            </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          {simulated.length > 0 && (
+            <Badge variant="outline" className="text-xs">{simulated.length} assignments</Badge>
           )}
           <Button
-            variant="deploy"
+            onClick={() => setDiffOpen(true)}
+            disabled={deploying || simulated.length === 0 || isLoading}
+            className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
             size="sm"
-            onClick={handleDeployAll}
-            disabled={deployingAll || pendingRows.length === 0}
-            className="gap-1.5"
           >
             <Rocket className="h-3.5 w-3.5" />
-            Deploy All Pending
+            Deploy All
           </Button>
         </div>
       </div>
 
-      {!selectedWeekId ? (
+      {/* History/Science Redirect Card */}
+      {historyRedirect && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="py-4 flex items-center gap-3">
+            <ArrowRightLeft className="h-5 w-5 text-warning" />
+            <p className="text-sm">
+              <span className="font-semibold">{historyRedirect.from}</span> has no content this week.
+              Redirecting to <span className="font-semibold">{historyRedirect.to}</span> unit.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Simulation Table */}
+      {isLoading ? (
+        <Card>
+          <CardContent className="py-12 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      ) : simulated.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p>Select a saved week to review and deploy assignments.</p>
+            <ShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-30" />
+            <p>No assignments to preview. Fetch pacing data first.</p>
           </CardContent>
         </Card>
       ) : (
         <Card className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              Assignment Preview — {selectedMonth} Week {selectedWeek}
+            </CardTitle>
+          </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs w-[100px]">Day</TableHead>
-                    <TableHead className="text-xs">Assignment Label</TableHead>
+                    <TableHead className="text-xs">Subject</TableHead>
+                    <TableHead className="text-xs">Assignment Title</TableHead>
                     <TableHead className="text-xs">Category</TableHead>
-                    <TableHead className="text-xs">Weighting</TableHead>
+                    <TableHead className="text-xs">Weight</TableHead>
                     <TableHead className="text-xs text-center">Points</TableHead>
-                    <TableHead className="text-xs text-center">Status</TableHead>
-                    <TableHead className="text-xs text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {assignmentRows.map((row) => {
-                    const isDisabled = row.title === '—';
-                    return (
-                      <TableRow key={row.id} className={isDisabled ? 'opacity-40' : ''}>
-                        <TableCell className="text-xs font-medium text-primary">{row.day}</TableCell>
-                        <TableCell className="text-xs max-w-[250px]">
-                          {isDisabled ? (
-                            <span className="italic text-muted-foreground">No Assignment (auto-logic)</span>
-                          ) : (
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">{row.title}</span>
-                              {row.isSynthetic && (
-                                <span className="text-[9px] text-primary/70 font-mono uppercase tracking-tight flex items-center gap-1">
-                                  <Zap size={10} className="fill-current" /> Auto-Generated
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-[10px] text-muted-foreground uppercase tracking-wider font-mono">{row.groupName}</TableCell>
-                        <TableCell>
-                          {!isDisabled && (
-                            <Badge variant="outline" className="text-[9px] font-bold tabular-nums">
-                              {CATEGORY_WEIGHTS[row.groupName] || '—'}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-center font-mono">{isDisabled ? '—' : row.points}</TableCell>
-                        <TableCell className="text-xs text-center">
-                          {isDisabled ? '—' : (
-                            row.deploy_status === 'DEPLOYED'
-                              ? <Badge className="text-[10px] bg-success text-success-foreground">DEPLOYED</Badge>
-                              : row.deploy_status === 'ERROR'
-                                ? <Badge variant="destructive" className="text-[10px]">ERROR</Badge>
-                                : <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">PENDING</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-right">
-                          {!isDisabled && (
-                            <div className="flex items-center justify-end gap-1">
-                              {row.canvas_url && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(row.canvas_url!, '_blank')}>
-                                  <ExternalLink className="h-3 w-3" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="deploy"
-                                size="sm"
-                                className="h-7 text-[11px] gap-1"
-                                onClick={() => handleDeploy(row)}
-                                disabled={deploying[row.id]}
-                              >
-                                {deploying[row.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Rocket className="h-3 w-3" /> Deploy</>}
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {assignmentRows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No pacing data for this week.
+                  {simulated.map((row) => (
+                    <TableRow key={row.id} className={row.isSynthetic ? 'bg-primary/5' : ''}>
+                      <TableCell className="text-xs font-medium text-primary">
+                        {row.dayIndex === 4 ? (
+                          <span className="text-muted-foreground italic">Friday</span>
+                        ) : row.day}
                       </TableCell>
+                      <TableCell className="text-xs font-semibold">{row.subject}</TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold">{row.title}</span>
+                          {row.isSynthetic && (
+                            <span className="text-[9px] text-primary/70 font-mono uppercase tracking-tight flex items-center gap-1">
+                              <Zap size={10} className="fill-current" /> Auto-Generated
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-[10px] text-muted-foreground uppercase tracking-wider font-mono">
+                        {row.groupName}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px] font-bold tabular-nums">
+                          {CATEGORY_WEIGHTS[row.groupName] || '—'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-center font-mono">{row.points}</TableCell>
                     </TableRow>
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -370,13 +325,34 @@ export default function AssignmentsPage() {
         </Card>
       )}
 
+      {/* Friday Exception Notice */}
+      <Card className="border-muted bg-muted/30">
+        <CardContent className="py-3 flex items-center gap-3">
+          <AlertCircle size={16} className="text-muted-foreground shrink-0" />
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+            Friday Exception: No Homework / No Assignments — column muted by design.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Kernel Info */}
-      <div className="flex items-center gap-3 p-4 bg-accent/50 border border-border rounded-xl">
+      <div className="flex items-center gap-3 p-4 bg-accent/5 border border-border rounded-xl">
         <AlertCircle size={16} className="text-primary shrink-0" />
         <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest leading-relaxed">
-          Kernel Sync: Math Written Tests auto-generate Fact Test + Study Guide. LA uses Shurley CP-only rule. Spelling deploys Tests only.
+          Gatekeeper v21.0: Math Triple Sequence active. Shurley CP-only filter active. Spelling Test-only filter active.
         </p>
       </div>
+
+      <SafetyDiffModal
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        month={selectedMonth}
+        week={selectedWeek}
+        action="DEPLOY_ASSIGNMENTS"
+        itemCount={simulated.length}
+        items={simulated.map(s => ({ label: s.title, subject: s.subject }))}
+        onApprove={handleDeploy}
+      />
     </div>
   );
 }

@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FolderSearch, Wand2, Check, AlertTriangle, FileText, RefreshCw, Upload, Loader2 } from 'lucide-react';
+import { FolderSearch, Wand2, FileText, RefreshCw, Upload, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { callEdge } from '@/lib/edge';
+import { useSystemStore } from '@/store/useSystemStore';
 
 interface FileRecord {
   id: string;
@@ -21,10 +22,15 @@ interface FileRecord {
   created_at: string | null;
 }
 
+interface OrphanAlert {
+  subject: string;
+  lessonNum: string;
+  day: string;
+}
+
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const FILE_TYPES = ['worksheet', 'test', 'study_guide', 'answer_key', 'resource'] as const;
 
-// Regex classification patterns
 const REGEX_PATTERNS: { pattern: RegExp; subject: string; type: string; lessonExtract: RegExp | null }[] = [
   { pattern: /SM5.*L(\d+)/i, subject: 'Math', type: 'worksheet', lessonExtract: /L(\d+)/i },
   { pattern: /SM5.*T(\d+)/i, subject: 'Math', type: 'test', lessonExtract: /T(\d+)/i },
@@ -34,7 +40,7 @@ const REGEX_PATTERNS: { pattern: RegExp; subject: string; type: string; lessonEx
   { pattern: /spell/i, subject: 'Spelling', type: 'test', lessonExtract: /(\d+)/ },
 ];
 
-function classifyByRegex(filename: string): { subject: string; type: string; lessonNum: string; confidence: string } | null {
+function classifyByRegex(filename: string) {
   for (const rule of REGEX_PATTERNS) {
     if (rule.pattern.test(filename)) {
       let lessonNum = '';
@@ -56,19 +62,13 @@ function generateFriendlyName(subject: string, type: string, lessonNum: string):
   const typeSuffix: Record<string, string> = {
     worksheet: '_L', test: '_T', study_guide: '_SG', answer_key: '_AK', resource: '_R',
   };
-  const prefix = prefixes[subject] || subject.slice(0, 3).toUpperCase();
-  const suffix = typeSuffix[type] || '_';
-  return `${prefix}${suffix}${lessonNum.padStart(3, '0')}.pdf`;
+  return `${prefixes[subject] || subject.slice(0, 3).toUpperCase()}${typeSuffix[type] || '_'}${lessonNum.padStart(3, '0')}.pdf`;
 }
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Strip data URL prefix to get raw base64
-      resolve(result.split(',')[1]);
-    };
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -81,6 +81,9 @@ export default function FileOrganizerPage() {
   const [newFilename, setNewFilename] = useState('');
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  const pacingData = useSystemStore((s) => s.pacingData);
+
   useEffect(() => { loadFiles(); }, []);
 
   const loadFiles = async () => {
@@ -89,6 +92,26 @@ export default function FileOrganizerPage() {
     if (data) setFiles(data);
     setLoading(false);
   };
+
+  // Orphan checker: cross-reference pacing data with files
+  const orphanAlerts: OrphanAlert[] = useMemo(() => {
+    if (!pacingData || files.length === 0) return [];
+    const alerts: OrphanAlert[] = [];
+    const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+    for (const [subject, cells] of Object.entries(pacingData.subjects)) {
+      cells.forEach((cell, i) => {
+        if (cell.isNoClass || !cell.lessonNum) return;
+        const hasFile = files.some(
+          (f) => f.subject === subject && f.lesson_num === cell.lessonNum
+        );
+        if (!hasFile) {
+          alerts.push({ subject, lessonNum: cell.lessonNum, day: DAYS[i] });
+        }
+      });
+    }
+    return alerts;
+  }, [pacingData, files]);
 
   const handleAddFile = async () => {
     if (!newFilename.trim()) return;
@@ -117,11 +140,8 @@ export default function FileOrganizerPage() {
       });
       const friendly = generateFriendlyName(result.subject, result.type, result.lesson_num);
       await supabase.from('files').update({
-        subject: result.subject,
-        type: result.type,
-        lesson_num: result.lesson_num,
-        confidence: 'ai',
-        friendly_name: friendly,
+        subject: result.subject, type: result.type, lesson_num: result.lesson_num,
+        confidence: 'ai', friendly_name: friendly,
       }).eq('id', file.id);
       toast.success(`AI classified: ${result.subject} ${result.type}`);
       loadFiles();
@@ -133,7 +153,6 @@ export default function FileOrganizerPage() {
 
   const handleManualUpdate = async (id: string, field: string, value: string) => {
     const update: any = { [field]: value, confidence: 'manual' };
-    // Regenerate friendly name if subject/type/lesson changed
     const file = files.find(f => f.id === id);
     if (file) {
       const subj = field === 'subject' ? value : (file.subject || '');
@@ -148,8 +167,6 @@ export default function FileOrganizerPage() {
   const handleClassifyAll = async () => {
     const unclassified = files.filter(f => !f.subject || f.confidence === 'unclassified');
     if (unclassified.length === 0) { toast.info('All files classified'); return; }
-    
-    // First try regex
     let regexCount = 0;
     for (const file of unclassified) {
       const r = classifyByRegex(file.original_name || '');
@@ -161,13 +178,10 @@ export default function FileOrganizerPage() {
         regexCount++;
       }
     }
-
-    // Then AI for remaining
     const remaining = unclassified.filter(f => !classifyByRegex(f.original_name || ''));
     for (const file of remaining) {
       await handleAIClassify(file);
     }
-
     toast.success(`Classified: ${regexCount} regex, ${remaining.length} AI`);
     loadFiles();
   };
@@ -181,11 +195,11 @@ export default function FileOrganizerPage() {
   };
 
   return (
-    <div className="space-y-6 animate-slide-in">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">File Organizer</h1>
-          <p className="text-muted-foreground mt-1">AI-powered Drive file classifier and renamer</p>
+          <p className="text-muted-foreground mt-1">AI-powered Drive file classifier with orphan detection</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={loadFiles} className="gap-1.5">
@@ -197,7 +211,29 @@ export default function FileOrganizerPage() {
         </div>
       </div>
 
-      {/* Drop zone for PDF vision classify */}
+      {/* Orphan Alerts */}
+      {orphanAlerts.length > 0 && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Missing Files ({orphanAlerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-1">
+              {orphanAlerts.map((alert, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="text-destructive font-bold">🔴</span>
+                  <span>Missing File: <strong>{alert.subject}</strong> Lesson {alert.lessonNum} ({alert.day})</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Drop zone */}
       <Card
         className={`border-2 border-dashed transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -212,22 +248,12 @@ export default function FileOrganizerPage() {
           setUploading(true);
           for (const file of droppedFiles) {
             try {
-              // Convert to image for vision — for PDFs we use the first page via canvas
-              let base64: string;
-              if (file.type.startsWith('image/')) {
-                base64 = await fileToBase64(file);
-              } else {
-                // For PDFs, read as data URL for now (Gemini can handle PDF base64)
-                base64 = await fileToBase64(file);
-              }
+              const base64 = await fileToBase64(file);
               const result = await callEdge<{
                 subject: string; type: string; lesson_num: string; suggested_name: string;
               }>('file-vision-classify', { image_base64: base64, filename: file.name });
-
               await supabase.from('files').insert({
-                original_name: file.name,
-                subject: result.subject,
-                type: result.type,
+                original_name: file.name, subject: result.subject, type: result.type,
                 lesson_num: result.lesson_num,
                 friendly_name: result.suggested_name || generateFriendlyName(result.subject, result.type, result.lesson_num),
                 confidence: 'ai-vision',
@@ -250,7 +276,6 @@ export default function FileOrganizerPage() {
           <p className="text-sm font-medium">
             {uploading ? 'Classifying with AI Vision...' : 'Drop PDF or image files here for AI Vision classification'}
           </p>
-          <p className="text-xs text-muted-foreground">Gemini analyzes the document content to identify subject, type, and lesson</p>
         </CardContent>
       </Card>
 
@@ -292,15 +317,13 @@ export default function FileOrganizerPage() {
                 {loading ? (
                   <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Loading...</td></tr>
                 ) : files.length === 0 ? (
-                  <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No files yet. Add filenames above to classify.</td></tr>
+                  <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No files yet.</td></tr>
                 ) : files.map(file => (
                   <tr key={file.id} className="border-t hover:bg-muted/50">
                     <td className="p-3 font-mono text-xs max-w-[200px] truncate">{file.original_name}</td>
                     <td className="p-3">
                       <Select value={file.subject || ''} onValueChange={v => handleManualUpdate(file.id, 'subject', v)}>
-                        <SelectTrigger className="h-7 text-xs w-28">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="—" /></SelectTrigger>
                         <SelectContent>
                           {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                         </SelectContent>
@@ -308,17 +331,14 @@ export default function FileOrganizerPage() {
                     </td>
                     <td className="p-3">
                       <Select value={file.type || ''} onValueChange={v => handleManualUpdate(file.id, 'type', v)}>
-                        <SelectTrigger className="h-7 text-xs w-28">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="—" /></SelectTrigger>
                         <SelectContent>
                           {FILE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </td>
                     <td className="p-3">
-                      <Input value={file.lesson_num || ''} onChange={e => handleManualUpdate(file.id, 'lesson_num', e.target.value)}
-                        className="h-7 text-xs w-16" />
+                      <Input value={file.lesson_num || ''} onChange={e => handleManualUpdate(file.id, 'lesson_num', e.target.value)} className="h-7 text-xs w-16" />
                     </td>
                     <td className="p-3 font-mono text-xs text-primary">{file.friendly_name || '—'}</td>
                     <td className="p-3">{confidenceBadge(file.confidence)}</td>
