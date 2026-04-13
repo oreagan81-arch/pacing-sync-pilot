@@ -89,9 +89,26 @@ export default function AssignmentsPage() {
     return null;
   }, [pacingData]);
 
-  // Check if a file exists in content map
-  const hasFile = (subject: string, lessonNum: string): boolean => {
-    return files.some(f => f.subject === subject && f.lesson_num === lessonNum);
+  // Check if a file exists in content map by matching lesson_ref patterns
+  const findFile = (subject: string, lessonNum: string, type: string): ContentMapRecord | undefined => {
+    // Build expected lesson_ref patterns based on subject and type
+    const subjectPrefix = subject === 'Language Arts' ? 'ELA' : 
+                          subject === 'Reading' ? 'Reading' :
+                          subject === 'Spelling' ? 'Spelling' : subject;
+    
+    // Try exact match patterns like Math_SB_L096, Reading_L001, etc.
+    const paddedNum = lessonNum.padStart(3, '0');
+    return contentMap.find(f => {
+      const ref = f.lesson_ref;
+      // Match patterns like Math_SB_L096, Math_HW_Evens, Reading_L001, etc.
+      if (ref.includes(`_L${paddedNum}`) && f.subject === subject) return true;
+      if (ref.includes(`_${lessonNum}`) && f.subject === subject) return true;
+      return false;
+    });
+  };
+
+  const hasFile = (subject: string, lessonNum: string, type: string = ''): boolean => {
+    return !!findFile(subject, lessonNum, type);
   };
 
   // Build simulated assignments from pacing data
