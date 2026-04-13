@@ -9,11 +9,10 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { generateCanvasPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 import { useSystemStore } from '@/store/useSystemStore';
 import SafetyDiffModal from '@/components/SafetyDiffModal';
-
-const GAS_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
 
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -38,6 +37,7 @@ export default function PageBuilderPage() {
   const [weeks, setWeeks] = useState<WeekOption[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState<string>('');
   const [selectedWeek, setSelectedWeek] = useState<WeekOption | null>(null);
+  const [savedRows, setSavedRows] = useState<CanvasPageRow[]>([]);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
@@ -46,7 +46,6 @@ export default function PageBuilderPage() {
   const [diffOpen, setDiffOpen] = useState(false);
   const { selectedMonth, selectedWeek: storeWeek, pacingData, fetchPacingData } = useSystemStore();
 
-  // Realtime deploy notifications — update statuses live
   const handleRealtimeEvent = useCallback((event: any) => {
     if (event.action === 'page_deploy' && event.subject) {
       setDeployStatuses((prev) => ({
@@ -57,25 +56,37 @@ export default function PageBuilderPage() {
   }, []);
   useRealtimeDeploy(handleRealtimeEvent);
 
-  // Load weeks list
   useEffect(() => {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
       if (data) setWeeks(data);
     });
   }, []);
 
-  // Load week details + fetch GAS pacing data when week changes
+  useEffect(() => {
+    if (selectedWeekId || weeks.length === 0) return;
+    const matchingWeek = weeks.find((week) => week.quarter === selectedMonth && week.week_num === storeWeek);
+    if (matchingWeek) {
+      setSelectedWeekId(matchingWeek.id);
+    }
+  }, [weeks, selectedWeekId, selectedMonth, storeWeek]);
+
   useEffect(() => {
     if (!selectedWeekId) return;
-    const week = weeks.find((w) => w.id === selectedWeekId);
-    setSelectedWeek(week || null);
+    const week = weeks.find((w) => w.id === selectedWeekId) || null;
+    setSelectedWeek(week);
 
-    // Fetch GAS pacing data for this week
     if (week) {
       fetchPacingData(week.quarter, week.week_num);
     }
 
-    // Load deploy log for this week's pages
+    supabase
+      .from('pacing_rows')
+      .select('*')
+      .eq('week_id', selectedWeekId)
+      .then(({ data }) => {
+        setSavedRows((data as unknown as CanvasPageRow[]) || []);
+      });
+
     supabase
       .from('deploy_log')
       .select('*')
@@ -95,29 +106,34 @@ export default function PageBuilderPage() {
       });
   }, [selectedWeekId, weeks, fetchPacingData]);
 
-  // Build CanvasPageRow[] from GAS pacing data
   const rows: CanvasPageRow[] = useMemo(() => {
-    if (!pacingData) return [];
+    if (!pacingData) return savedRows;
+
+    const savedRowMap = new Map(savedRows.map((row) => [`${row.subject}:${row.day}`, row]));
     const result: CanvasPageRow[] = [];
-    const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
     for (const [subject, cells] of Object.entries(pacingData.subjects)) {
       cells.forEach((cell, idx) => {
+        const day = days[idx];
+        const savedRow = savedRowMap.get(`${subject}:${day}`);
         result.push({
-          day: DAYS[idx],
-          type: cell.isTest ? 'Test' : cell.isReview ? 'Review' : 'Lesson',
-          lesson_num: cell.lessonNum || null,
-          in_class: cell.value || null,
-          at_home: null,
-          canvas_url: null,
-          canvas_assignment_id: null,
-          object_id: null,
+          day,
+          type: savedRow?.type || (cell.isTest ? 'Test' : cell.isReview ? 'Review' : cell.isNoClass ? '-' : 'Lesson'),
+          lesson_num: cell.lessonNum || savedRow?.lesson_num || null,
+          in_class: cell.value || savedRow?.in_class || null,
+          at_home: savedRow?.at_home || null,
+          canvas_url: savedRow?.canvas_url || null,
+          canvas_assignment_id: savedRow?.canvas_assignment_id || null,
+          object_id: savedRow?.object_id || null,
           subject,
-          resources: null,
+          resources: savedRow?.resources || null,
         });
       });
     }
+
     return result;
-  }, [pacingData]);
+  }, [pacingData, savedRows]);
 
   // Get rows for active subject (Reading tab merges Reading + Spelling)
   const subjectRows = useMemo(() => {
@@ -163,19 +179,13 @@ export default function PageBuilderPage() {
     setDeploying((p) => ({ ...p, [subject]: true }));
 
     try {
-      const res = await fetch(GAS_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        body: JSON.stringify({
-          action: 'DEPLOY_AGENDAS',
-          month: selectedMonth,
-          week: storeWeek,
-          subject,
-          courseId: config.courseIds[subject],
-        }),
+      const result = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('gas-dispatch', {
+        action: 'DEPLOY_AGENDAS',
+        month: selectedMonth,
+        week: storeWeek,
+        subject,
+        courseId: config.courseIds[subject],
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
 
       if (result.status === 'success') {
         setDeployStatuses((p) => ({ ...p, [subject]: { status: 'DEPLOYED', canvasUrl: result.canvasUrl } }));
