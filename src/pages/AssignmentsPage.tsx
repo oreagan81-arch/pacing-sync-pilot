@@ -35,12 +35,13 @@ interface SimulatedAssignment {
   lessonNum: string;
 }
 
-interface FileRecord {
-  subject: string | null;
-  lesson_num: string | null;
+interface ContentMapRecord {
+  lesson_ref: string;
+  subject: string;
   type: string | null;
-  friendly_name: string | null;
-  drive_file_id: string | null;
+  canonical_name: string | null;
+  canvas_file_id: string | null;
+  canvas_url: string | null;
 }
 
 const CATEGORY_WEIGHTS: Record<string, string> = {
