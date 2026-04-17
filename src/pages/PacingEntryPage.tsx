@@ -489,6 +489,8 @@ export default function PacingEntryPage({
                     const isNoAssignSubject =
                       config?.autoLogic.historyScienceNoAssign &&
                       (subject === 'History' || subject === 'Science');
+                    const isLABlocked =
+                      subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
                     const hideAssign = isFriday || isNoAssignSubject;
                     const isEven = cell.lesson_num ? parseInt(cell.lesson_num) % 2 === 0 : null;
 
