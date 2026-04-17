@@ -6,6 +6,32 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, init);
+      // Retry only on 5xx server errors / 429 throttling
+      if (res.status >= 500 || res.status === 429) {
+        if (i < attempts - 1) {
+          const backoff = 500 * Math.pow(2, i);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+      }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) {
+        const backoff = 500 * Math.pow(2, i);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Network error");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -44,7 +70,7 @@ Deno.serve(async (req) => {
     const courseBase = `${canvasBase}/api/v1/courses/${courseId}`;
 
     // 1. GET page to check existence + front_page
-    const getRes = await fetch(`${courseBase}/pages/${pageUrl}`, { headers: canvasHeaders });
+    const getRes = await fetchWithRetry(`${courseBase}/pages/${pageUrl}`, { headers: canvasHeaders });
     let exists = false;
     let isFrontPage = false;
     let existingBody = "";
@@ -55,14 +81,13 @@ Deno.serve(async (req) => {
       isFrontPage = pageData.front_page === true;
       existingBody = pageData.body || "";
     } else {
-      await getRes.text(); // consume body
+      await getRes.text();
     }
 
     // 2. Content hash check — skip if body matches
     if (exists && existingBody === bodyHtml) {
-      // Still set as front page if requested
       if (setFrontPage && !isFrontPage) {
-        await fetch(`${courseBase}/pages/${pageUrl}`, {
+        await fetchWithRetry(`${courseBase}/pages/${pageUrl}`, {
           method: "PUT",
           headers: canvasHeaders,
           body: JSON.stringify({ wiki_page: { front_page: true, published: true } }),
@@ -87,7 +112,6 @@ Deno.serve(async (req) => {
     }
 
     // 3. Create or update the page
-    // If setFrontPage is requested, include front_page: true in the payload
     let pub = published ?? false;
     if (isFrontPage || setFrontPage) pub = true;
 
@@ -103,7 +127,7 @@ Deno.serve(async (req) => {
     const method = exists ? "PUT" : "POST";
     const url = exists ? `${courseBase}/pages/${pageUrl}` : `${courseBase}/pages`;
 
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       method,
       headers: canvasHeaders,
       body: JSON.stringify(payload),
@@ -120,6 +144,13 @@ Deno.serve(async (req) => {
         payload: payload as unknown as Record<string, unknown>,
       });
 
+      await sb.from("deploy_notifications").insert({
+        title: `Page deploy failed — ${subject || "?"}`,
+        message: `${method} ${res.status}: ${errText.slice(0, 200)}`,
+        level: "error",
+        entity_ref: `${subject || ""}:${pageUrl}`,
+      });
+
       return new Response(JSON.stringify({ error: errText, status: "ERROR" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -129,12 +160,12 @@ Deno.serve(async (req) => {
     const result = await res.json();
     const canvasUrl = `${canvasBase}/courses/${courseId}/pages/${result.url || pageUrl}`;
 
-    // 4. If page was just created (POST), we need a separate PUT to set front_page
+    // 4. If page was just created (POST), separate PUT to set front_page
     if (!exists && setFrontPage) {
-      const fpRes = await fetch(`${courseBase}/pages/${result.url || pageUrl}`, {
+      const fpRes = await fetchWithRetry(`${courseBase}/pages/${result.url || pageUrl}`, {
         method: "PUT",
         headers: canvasHeaders,
-        body: JSON.stringify({ wiki_page: { front_page: true } }),
+        body: JSON.stringify({ wiki_page: { front_page: true, published: true } }),
       });
       if (!fpRes.ok) {
         const fpErr = await fpRes.text();
@@ -149,6 +180,13 @@ Deno.serve(async (req) => {
       status: "DEPLOYED",
       canvas_url: canvasUrl,
       message: `${exists ? "Updated" : "Created"} page: ${pageTitle}${setFrontPage ? " (set as homepage)" : ""}`,
+    });
+
+    await sb.from("deploy_notifications").insert({
+      title: `${subject || "Page"} agenda deployed`,
+      message: `${exists ? "Updated" : "Created"} ${pageTitle}${setFrontPage ? " — set as homepage" : ""}`,
+      level: "info",
+      entity_ref: `${subject || ""}:${pageUrl}`,
     });
 
     return new Response(JSON.stringify({ status: "DEPLOYED", canvasUrl }), {

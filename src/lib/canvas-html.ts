@@ -1,10 +1,11 @@
 /**
  * THALES OS — Canvas HTML Generator
- * Matches the official Canvas Agenda Page template exactly.
+ * Premium mobile-friendly Canvas Agenda Pages.
  * Uses Canvas RCE-compatible classes and inline styles.
  */
 
 import { applyBrevity } from './assignment-logic';
+import { injectFileLinks, injectAssignmentLink, type ContentMapEntry } from './auto-link';
 
 export interface CanvasPageRow {
   day: string;
@@ -28,6 +29,19 @@ export interface CanvasPageParams {
   reminders: string;
   resources: string;
   quarterColor: string;
+  contentMap?: ContentMapEntry[];
+}
+
+export interface HomeroomPageParams {
+  weekNum: number;
+  quarter: string;
+  dateRange: string;
+  quarterColor: string;
+  reminders: string;
+  resources: string;
+  homeroomNotes?: string;
+  birthdays?: string;
+  upcomingTests?: string[];
 }
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -39,8 +53,15 @@ const BLOCK_IDS: Record<string, string> = {
   Friday: 'kl_custom_block_1',
 };
 
+// Mobile-friendly H4 divider style — replaces fixed width: 60%
+const DIVIDER_STYLE = (color: string) =>
+  `color: #ffffff; background-color: #333333; padding: 6px 16px; border-left: 4px solid ${color}; border-width: 0 0 0 4px; max-width: 100%; width: auto; display: inline-block;`;
+
+const DAY_HEADER_STYLE = (color: string) =>
+  `background-color: ${color}; color: #ffffff; border-color: ${color};`;
+
 export function generateCanvasPageHtml(params: CanvasPageParams): string {
-  const { subject, rows, quarter, weekNum, dateRange, reminders, resources, quarterColor } = params;
+  const { subject, rows, quarter, weekNum, dateRange, reminders, resources, quarterColor, contentMap = [] } = params;
   const parts: string[] = [];
 
   // 1. BANNER
@@ -53,7 +74,7 @@ export function generateCanvasPageHtml(params: CanvasPageParams): string {
   // 2. REMINDERS (omit if empty)
   if (reminders && reminders.trim()) {
     const items = reminders.split('\n').filter(Boolean).map(
-      (r) => `        <p>${r.trim()}</p>`
+      (r) => `        <p style="line-height: 1.5;">${r.trim()}</p>`
     ).join('\n');
     parts.push(`    <div id="kl_custom_block_0" class="">
         <h3 class="" style="background-color: #c51062; color: #ffffff; border-color: #c51062;"><i class="fas fa-exclamation" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Reminders</h3>
@@ -83,9 +104,9 @@ ${items}
     const items = allResources.map((trimmed) => {
       if (trimmed.startsWith('http')) {
         const label = trimmed.split('/').pop() || 'Resource';
-        return `        <p><a href="${trimmed}" target="_blank">${label}</a></p>`;
+        return `        <p style="line-height: 1.5;"><a href="${trimmed}" target="_blank">${label}</a></p>`;
       }
-      return `        <p>${trimmed}</p>`;
+      return `        <p style="line-height: 1.5;">${trimmed}</p>`;
     }).join('\n');
     parts.push(`    <div id="kl_custom_block_5" class="">
         <h3 style="background-color: #00c0a5; color: #ffffff; border-color: #00c0a5;"><i class="fas fa-question" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Resources</h3>
@@ -106,55 +127,70 @@ ${items}
     if (row.type === 'X' || row.type === 'No Class' || row.type === '-') {
       const label = row.type === 'X' ? 'No School' : 'No Class';
       parts.push(`    <div id="${blockId}" class="">
-        <h3 class="" style="background-color: #0065a7; color: #ffffff; border-color: #0065a7;"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
-        <p><em>${label}</em></p>
+        <h3 class="" style="${DAY_HEADER_STYLE(quarterColor)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <p style="line-height: 1.5;"><em>${label}</em></p>
         <p>&nbsp;</p>
     </div>`);
       continue;
     }
 
-    // Build In Class content
-    const brevityText = applyBrevity(row.subject, row.lesson_num, row.in_class || '');
+    // Build In Class content with auto-linked refs and assignment hyperlink
+    let brevityText = applyBrevity(row.subject, row.lesson_num, row.in_class || '');
+    brevityText = injectFileLinks(brevityText, contentMap, row.subject);
+    brevityText = injectAssignmentLink(brevityText, row.canvas_url);
+
     // For multiple subjects on the same day (Reading tab merges Reading + Spelling)
     const extraRows = dayRows.slice(1);
     const extraInClass = extraRows
-      .map((r) => `        <p>${applyBrevity(r.subject, r.lesson_num, r.in_class || '')}</p>`)
+      .map((r) => {
+        let t = applyBrevity(r.subject, r.lesson_num, r.in_class || '');
+        t = injectFileLinks(t, contentMap, r.subject);
+        t = injectAssignmentLink(t, r.canvas_url);
+        return `        <p style="line-height: 1.5;">${t}</p>`;
+      })
       .join('\n');
 
-    // Determine if there's homework
     const isFriday = day === 'Friday';
     const hasAtHome = !isFriday && row.at_home && row.at_home.trim();
 
     let dayHtml = `    <div id="${blockId}" class="">
-        <h3 class="" style="background-color: #0065a7; color: #ffffff; border-color: #0065a7;"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
-        <h4 class="kl_solid_border" style="color: #ffffff; background-color: #333333; padding-left: 40px; border-width: 0px; width: 60%;"><strong>In Class</strong></h4>
-        <p>${brevityText}</p>`;
+        <h3 class="" style="${DAY_HEADER_STYLE(quarterColor)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>In Class</strong></h4>
+        <p style="line-height: 1.5;">${brevityText}</p>`;
 
     if (extraInClass) {
       dayHtml += `\n${extraInClass}`;
     }
 
-    // AT HOME section — only if there's homework and it's not Friday
+    // AT HOME — only if there's homework and it's not Friday
     if (hasAtHome) {
-      const atHomeText = row.at_home!.trim();
+      let atHomeText = row.at_home!.trim();
+      atHomeText = injectFileLinks(atHomeText, contentMap, row.subject);
       dayHtml += `
         <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="color: #ffffff; background-color: #333333; padding-left: 40px; border-width: 0px; width: 60%;"><strong>At Home</strong></h4>
-        <p>${atHomeText}</p>`;
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>
+        <p style="line-height: 1.5;">${atHomeText}</p>`;
     }
 
     // Extra rows at-home (e.g. Spelling homework on Reading tab)
     for (const er of extraRows) {
       if (!isFriday && er.at_home && er.at_home.trim()) {
         if (!hasAtHome) {
-          // Need to add the At Home header if the primary row didn't have one
           dayHtml += `
         <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="color: #ffffff; background-color: #333333; padding-left: 40px; border-width: 0px; width: 60%;"><strong>At Home</strong></h4>`;
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>`;
         }
+        const linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
         dayHtml += `
-        <p>${er.at_home.trim()}</p>`;
+        <p style="line-height: 1.5;">${linked}</p>`;
       }
+    }
+
+    // Friday explicit no-homework note
+    if (isFriday) {
+      dayHtml += `
+        <p>&nbsp;</p>
+        <p style="line-height: 1.5;"><em>No homework over the weekend \u2014 enjoy! \ud83c\udf89</em></p>`;
     }
 
     dayHtml += `
@@ -167,5 +203,84 @@ ${items}
   // Close wrapper
   parts.push(`</div>`);
 
+  return parts.join('\n');
+}
+
+/**
+ * Homeroom variant — no daily lesson blocks. Banner + reminders + notes + birthdays + tests + resources.
+ */
+export function generateHomeroomPageHtml(params: HomeroomPageParams): string {
+  const { weekNum, quarter, dateRange, quarterColor, reminders, resources, homeroomNotes, birthdays, upcomingTests } = params;
+  const parts: string[] = [];
+
+  parts.push(`<div id="kl_wrapper_3" class="kl_circle_left kl_wrapper" style="border-style: none;">
+    <div id="kl_banner" class="">
+        <h2 class="" style="color: #ffffff; background-color: ${quarterColor}; text-align: center;"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${quarterColor};">Homeroom \u2014 Weekly Update</span></h2>
+        <p class="kl_subtitle">${quarter}, Week ${weekNum} | ${dateRange}</p>
+    </div>`);
+
+  // Notes from teacher
+  if (homeroomNotes && homeroomNotes.trim()) {
+    const noteHtml = homeroomNotes
+      .split('\n')
+      .filter(Boolean)
+      .map((n) => `        <p style="line-height: 1.6;">${n.trim()}</p>`)
+      .join('\n');
+    parts.push(`    <div id="kl_custom_block_7" class="">
+        <h3 style="background-color: ${quarterColor}; color: #ffffff; border-color: ${quarterColor};"><i class="fas fa-comment" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>From Mr. Teacher</h3>
+${noteHtml}
+        <p>&nbsp;</p>
+    </div>`);
+  }
+
+  // Reminders
+  if (reminders && reminders.trim()) {
+    const items = reminders.split('\n').filter(Boolean).map(
+      (r) => `        <p style="line-height: 1.5;">${r.trim()}</p>`
+    ).join('\n');
+    parts.push(`    <div id="kl_custom_block_0" class="">
+        <h3 style="background-color: #c51062; color: #ffffff; border-color: #c51062;"><i class="fas fa-exclamation" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Reminders</h3>
+${items}
+        <p>&nbsp;</p>
+    </div>`);
+  }
+
+  // Upcoming tests
+  if (upcomingTests && upcomingTests.length > 0) {
+    const items = upcomingTests.map((t) => `        <p style="line-height: 1.5;">${t}</p>`).join('\n');
+    parts.push(`    <div id="kl_custom_block_8" class="">
+        <h3 style="background-color: #c87800; color: #ffffff; border-color: #c87800;"><i class="fas fa-clipboard-check" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Upcoming Tests</h3>
+${items}
+        <p>&nbsp;</p>
+    </div>`);
+  }
+
+  // Birthdays
+  if (birthdays && birthdays.trim()) {
+    parts.push(`    <div id="kl_custom_block_9" class="">
+        <h3 style="background-color: #6644bb; color: #ffffff; border-color: #6644bb;"><i class="fas fa-birthday-cake" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Birthdays</h3>
+        <p style="line-height: 1.5;">${birthdays.trim()}</p>
+        <p>&nbsp;</p>
+    </div>`);
+  }
+
+  // Resources
+  if (resources && resources.trim()) {
+    const items = resources.split('\n').filter(Boolean).map((r) => {
+      const trimmed = r.trim();
+      if (trimmed.startsWith('http')) {
+        const label = trimmed.split('/').pop() || 'Resource';
+        return `        <p style="line-height: 1.5;"><a href="${trimmed}" target="_blank">${label}</a></p>`;
+      }
+      return `        <p style="line-height: 1.5;">${trimmed}</p>`;
+    }).join('\n');
+    parts.push(`    <div id="kl_custom_block_5" class="">
+        <h3 style="background-color: #00c0a5; color: #ffffff; border-color: #00c0a5;"><i class="fas fa-question" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>Resources</h3>
+${items}
+        <p>&nbsp;</p>
+    </div>`);
+  }
+
+  parts.push(`</div>`);
   return parts.join('\n');
 }
