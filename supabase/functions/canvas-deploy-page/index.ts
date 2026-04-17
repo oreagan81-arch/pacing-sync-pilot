@@ -11,7 +11,6 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Pro
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(url, init);
-      // Retry only on 5xx server errors / 429 throttling
       if (res.status >= 500 || res.status === 429) {
         if (i < attempts - 1) {
           const backoff = 500 * Math.pow(2, i);
@@ -38,7 +37,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { subject, courseId, pageUrl, pageTitle, bodyHtml, published, setFrontPage, weekId } = await req.json();
+    const { subject, courseId, pageUrl, pageTitle, bodyHtml, published, setFrontPage, weekId, contentHash } = await req.json();
 
     if (!courseId || !pageUrl || !pageTitle || !bodyHtml) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -62,6 +61,35 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, supabaseKey);
 
+    // 0. HASH PRE-SKIP — fastest path. If client-provided hash matches the
+    // last-deployed hash recorded on weeks.page_hashes[subject], skip Canvas
+    // entirely.
+    if (weekId && subject && contentHash) {
+      const { data: weekRow } = await sb
+        .from("weeks")
+        .select("page_hashes")
+        .eq("id", weekId)
+        .maybeSingle();
+      const storedHash = (weekRow?.page_hashes as Record<string, string> | null)?.[subject];
+      if (storedHash && storedHash === contentHash) {
+        await sb.from("deploy_log").insert({
+          week_id: weekId,
+          subject,
+          action: "page_deploy",
+          status: "NO_CHANGE",
+          canvas_url: `${canvasBase}/courses/${courseId}/pages/${pageUrl}`,
+          message: "Hash match — skipped without Canvas GET",
+        });
+        return new Response(JSON.stringify({
+          status: "NO_CHANGE",
+          canvasUrl: `${canvasBase}/courses/${courseId}/pages/${pageUrl}`,
+          skipReason: "hash_match",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const canvasHeaders = {
       Authorization: `Bearer ${canvasToken}`,
       "Content-Type": "application/json",
@@ -84,15 +112,33 @@ Deno.serve(async (req) => {
       await getRes.text();
     }
 
-    // 2. Content hash check — skip if body matches
+    // Helper to write the deploy hash back to weeks.page_hashes[subject]
+    const persistHash = async () => {
+      if (!weekId || !subject || !contentHash) return;
+      const { data: w } = await sb
+        .from("weeks")
+        .select("page_hashes")
+        .eq("id", weekId)
+        .maybeSingle();
+      const current = (w?.page_hashes as Record<string, string> | null) || {};
+      current[subject] = contentHash;
+      await sb.from("weeks").update({ page_hashes: current }).eq("id", weekId);
+    };
+
+    // 2. Body-compare fallback — skip if body matches
     if (exists && existingBody === bodyHtml) {
-      if (setFrontPage && !isFrontPage) {
+      // Even on no-content-change, ensure homepage stays published
+      if ((setFrontPage && !isFrontPage) || isFrontPage) {
         await fetchWithRetry(`${courseBase}/pages/${pageUrl}`, {
           method: "PUT",
           headers: canvasHeaders,
-          body: JSON.stringify({ wiki_page: { front_page: true, published: true } }),
+          body: JSON.stringify({
+            wiki_page: { front_page: setFrontPage || isFrontPage, published: true },
+          }),
         });
       }
+
+      await persistHash();
 
       await sb.from("deploy_log").insert({
         week_id: weekId || null,
@@ -112,6 +158,7 @@ Deno.serve(async (req) => {
     }
 
     // 3. Create or update the page
+    // Front-page guard: if existing page is already a front page, FORCE published: true on every PUT
     let pub = published ?? false;
     if (isFrontPage || setFrontPage) pub = true;
 
@@ -120,7 +167,7 @@ Deno.serve(async (req) => {
         title: pageTitle,
         body: bodyHtml,
         published: pub,
-        ...(setFrontPage ? { front_page: true } : {}),
+        ...(setFrontPage || isFrontPage ? { front_page: true } : {}),
       },
     };
 
@@ -172,6 +219,8 @@ Deno.serve(async (req) => {
         console.error("Failed to set front page:", fpErr);
       }
     }
+
+    await persistHash();
 
     await sb.from("deploy_log").insert({
       week_id: weekId || null,
