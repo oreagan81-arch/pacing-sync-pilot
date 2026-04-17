@@ -26,6 +26,7 @@ export type Database = {
           subject: string | null
           title: string | null
           type: string | null
+          updated_at: string
           week_id: string | null
         }
         Insert: {
@@ -39,6 +40,7 @@ export type Database = {
           subject?: string | null
           title?: string | null
           type?: string | null
+          updated_at?: string
           week_id?: string | null
         }
         Update: {
@@ -52,6 +54,7 @@ export type Database = {
           subject?: string | null
           title?: string | null
           type?: string | null
+          updated_at?: string
           week_id?: string | null
         }
         Relationships: [
@@ -64,6 +67,48 @@ export type Database = {
           },
         ]
       }
+      automation_jobs: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          job_name: string
+          last_result: Json | null
+          last_run: string | null
+          next_run: string | null
+          retry_count: number
+          schedule: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          job_name: string
+          last_result?: Json | null
+          last_run?: string | null
+          next_run?: string | null
+          retry_count?: number
+          schedule?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          job_name?: string
+          last_result?: Json | null
+          last_run?: string | null
+          next_run?: string | null
+          retry_count?: number
+          schedule?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       content_map: {
         Row: {
           canonical_name: string | null
@@ -74,6 +119,7 @@ export type Database = {
           lesson_ref: string
           subject: string
           type: string | null
+          updated_at: string
         }
         Insert: {
           canonical_name?: string | null
@@ -84,6 +130,7 @@ export type Database = {
           lesson_ref: string
           subject: string
           type?: string | null
+          updated_at?: string
         }
         Update: {
           canonical_name?: string | null
@@ -94,6 +141,7 @@ export type Database = {
           lesson_ref?: string
           subject?: string
           type?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -141,6 +189,36 @@ export type Database = {
           },
         ]
       }
+      deploy_notifications: {
+        Row: {
+          created_at: string
+          entity_ref: string | null
+          id: string
+          level: string
+          message: string | null
+          read: boolean
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          entity_ref?: string | null
+          id?: string
+          level?: string
+          message?: string | null
+          read?: boolean
+          title: string
+        }
+        Update: {
+          created_at?: string
+          entity_ref?: string | null
+          id?: string
+          level?: string
+          message?: string | null
+          read?: boolean
+          title?: string
+        }
+        Relationships: []
+      }
       files: {
         Row: {
           confidence: string | null
@@ -152,6 +230,7 @@ export type Database = {
           original_name: string | null
           subject: string | null
           type: string | null
+          updated_at: string
         }
         Insert: {
           confidence?: string | null
@@ -163,6 +242,7 @@ export type Database = {
           original_name?: string | null
           subject?: string | null
           type?: string | null
+          updated_at?: string
         }
         Update: {
           confidence?: string | null
@@ -174,6 +254,7 @@ export type Database = {
           original_name?: string | null
           subject?: string | null
           type?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -188,6 +269,7 @@ export type Database = {
           id: string
           posted_at: string | null
           status: string | null
+          updated_at: string
         }
         Insert: {
           birthdays?: string | null
@@ -199,6 +281,7 @@ export type Database = {
           id?: string
           posted_at?: string | null
           status?: string | null
+          updated_at?: string
         }
         Update: {
           birthdays?: string | null
@@ -210,6 +293,7 @@ export type Database = {
           id?: string
           posted_at?: string | null
           status?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -231,6 +315,7 @@ export type Database = {
           resources: string | null
           subject: string
           type: string | null
+          updated_at: string
           week_id: string | null
         }
         Insert: {
@@ -250,6 +335,7 @@ export type Database = {
           resources?: string | null
           subject: string
           type?: string | null
+          updated_at?: string
           week_id?: string | null
         }
         Update: {
@@ -269,6 +355,7 @@ export type Database = {
           resources?: string | null
           subject?: string
           type?: string | null
+          updated_at?: string
           week_id?: string | null
         }
         Relationships: [
@@ -317,6 +404,144 @@ export type Database = {
         }
         Relationships: []
       }
+      system_health_snapshots: {
+        Row: {
+          canvas_status: string | null
+          created_at: string
+          details: Json
+          failed_deploys: number
+          id: string
+          orphan_files: number
+          pending_assignments: number
+          score: number
+        }
+        Insert: {
+          canvas_status?: string | null
+          created_at?: string
+          details?: Json
+          failed_deploys?: number
+          id?: string
+          orphan_files?: number
+          pending_assignments?: number
+          score?: number
+        }
+        Update: {
+          canvas_status?: string | null
+          created_at?: string
+          details?: Json
+          failed_deploys?: number
+          id?: string
+          orphan_files?: number
+          pending_assignments?: number
+          score?: number
+        }
+        Relationships: []
+      }
+      teacher_feedback_log: {
+        Row: {
+          action: string
+          after: Json | null
+          before: Json | null
+          created_at: string
+          diff_summary: string | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+        }
+        Insert: {
+          action: string
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          diff_summary?: string | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+        }
+        Update: {
+          action?: string
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          diff_summary?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      teacher_memory: {
+        Row: {
+          category: string
+          confidence: number
+          created_at: string
+          id: string
+          key: string
+          last_used: string | null
+          updated_at: string
+          usage_count: number
+          value: Json
+        }
+        Insert: {
+          category: string
+          confidence?: number
+          created_at?: string
+          id?: string
+          key: string
+          last_used?: string | null
+          updated_at?: string
+          usage_count?: number
+          value?: Json
+        }
+        Update: {
+          category?: string
+          confidence?: number
+          created_at?: string
+          id?: string
+          key?: string
+          last_used?: string | null
+          updated_at?: string
+          usage_count?: number
+          value?: Json
+        }
+        Relationships: []
+      }
+      teacher_patterns: {
+        Row: {
+          applied_count: number
+          confidence: number
+          created_at: string
+          description: string | null
+          id: string
+          pattern_type: string
+          rule: Json
+          subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          applied_count?: number
+          confidence?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          pattern_type: string
+          rule?: Json
+          subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          applied_count?: number
+          confidence?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          pattern_type?: string
+          rule?: Json
+          subject?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       weeks: {
         Row: {
           created_at: string | null
@@ -325,6 +550,7 @@ export type Database = {
           quarter: string
           reminders: string | null
           resources: string | null
+          updated_at: string
           week_num: number
         }
         Insert: {
@@ -334,6 +560,7 @@ export type Database = {
           quarter: string
           reminders?: string | null
           resources?: string | null
+          updated_at?: string
           week_num: number
         }
         Update: {
@@ -343,6 +570,7 @@ export type Database = {
           quarter?: string
           reminders?: string | null
           resources?: string | null
+          updated_at?: string
           week_num?: number
         }
         Relationships: []
