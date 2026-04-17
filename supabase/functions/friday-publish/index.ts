@@ -28,11 +28,16 @@ Deno.serve(async (req) => {
 
     const sb = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Post all DRAFT announcements
+    // 1. Post DRAFT reminder announcements scheduled for now-or-earlier
+    // Friday Rule exception: only `type='reminder'` with `scheduled_post` may auto-post.
+    const nowIso = new Date().toISOString();
     const { data: drafts, error: draftErr } = await sb
       .from("announcements")
       .select("*")
-      .eq("status", "DRAFT");
+      .eq("status", "DRAFT")
+      .eq("type", "reminder")
+      .not("scheduled_post", "is", null)
+      .lte("scheduled_post", nowIso);
 
     if (draftErr) throw new Error(`Fetch drafts: ${draftErr.message}`);
 
