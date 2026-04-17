@@ -10,6 +10,7 @@ import type { PacingCell } from '@/store/useSystemStore';
 import { generateAssignmentTitle, resolveAssignmentGroup } from './assignment-logic';
 import { injectFileLinks, type ContentMapEntry } from './auto-link';
 import { getCourseId } from './course-ids';
+import { isFridayHomeworkBlocked, FRIDAY_SKIP_REASON } from './friday-rules';
 
 export interface BuiltAssignment {
   rowKey: string;
@@ -133,10 +134,10 @@ export async function buildAssignmentForCell(
   const title = options?.titleOverride || generateAssignmentTitle(subject, type, lessonNum, prefix);
   const groupInfo = resolveAssignmentGroup(subject, type);
 
-  // Skip rules
+  // Skip rules — Friday rule is MANDATORY (not gated by config flag)
   let skipReason: string | null = null;
-  if (auto?.fridayNoHomework && dayIndex === 4 && type !== 'Test') {
-    skipReason = 'Friday — no homework';
+  if (isFridayHomeworkBlocked(day, type)) {
+    skipReason = FRIDAY_SKIP_REASON;
   }
   if (auto?.historyScienceNoAssign && (subject === 'History' || subject === 'Science')) {
     skipReason = `${subject} — no assignments`;

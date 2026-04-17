@@ -151,6 +151,7 @@ ${items}
       .join('\n');
 
     const isFriday = day === 'Friday';
+    // Friday Rule #1: No At Home section on Friday pages — hard block
     const hasAtHome = !isFriday && row.at_home && row.at_home.trim();
 
     let dayHtml = `    <div id="${blockId}" class="">
