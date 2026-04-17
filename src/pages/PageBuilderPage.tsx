@@ -8,13 +8,14 @@ import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriang
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
-import { generateCanvasPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { generateCanvasPageHtml, generateHomeroomPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import type { ContentMapEntry } from '@/lib/auto-link';
 import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 import { useSystemStore } from '@/store/useSystemStore';
 import SafetyDiffModal from '@/components/SafetyDiffModal';
 
-const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
+const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 interface WeekOption {
