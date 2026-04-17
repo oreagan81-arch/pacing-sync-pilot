@@ -39,6 +39,8 @@ export default function PageBuilderPage() {
   const [selectedWeekId, setSelectedWeekId] = useState<string>('');
   const [selectedWeek, setSelectedWeek] = useState<WeekOption | null>(null);
   const [savedRows, setSavedRows] = useState<CanvasPageRow[]>([]);
+  const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
+  const [latestNewsletter, setLatestNewsletter] = useState<{ homeroom_notes: string | null; birthdays: string | null } | null>(null);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
