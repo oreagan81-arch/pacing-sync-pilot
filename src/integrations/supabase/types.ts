@@ -309,9 +309,11 @@ export type Database = {
           deploy_status: string | null
           id: string
           in_class: string | null
+          is_synthetic: boolean
           last_deployed: string | null
           lesson_num: string | null
           object_id: string | null
+          parent_row_id: string | null
           resources: string | null
           subject: string
           type: string | null
@@ -329,9 +331,11 @@ export type Database = {
           deploy_status?: string | null
           id?: string
           in_class?: string | null
+          is_synthetic?: boolean
           last_deployed?: string | null
           lesson_num?: string | null
           object_id?: string | null
+          parent_row_id?: string | null
           resources?: string | null
           subject: string
           type?: string | null
@@ -349,9 +353,11 @@ export type Database = {
           deploy_status?: string | null
           id?: string
           in_class?: string | null
+          is_synthetic?: boolean
           last_deployed?: string | null
           lesson_num?: string | null
           object_id?: string | null
+          parent_row_id?: string | null
           resources?: string | null
           subject?: string
           type?: string | null
@@ -359,6 +365,13 @@ export type Database = {
           week_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pacing_rows_parent_row_id_fkey"
+            columns: ["parent_row_id"]
+            isOneToOne: false
+            referencedRelation: "pacing_rows"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pacing_rows_week_id_fkey"
             columns: ["week_id"]

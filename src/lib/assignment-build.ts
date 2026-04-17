@@ -111,6 +111,51 @@ export interface BuildContext {
   weekDates: string[]; // length 5, YYYY-MM-DD per day
 }
 
+/**
+ * Math Triple Logic — expand a single Math row into deployable assignments.
+ *
+ * Contract:
+ *  - Test row → 3 items: Written Test (same day), Fact Test (same day, synthetic),
+ *    Study Guide (due previous day, synthetic, omit from final).
+ *  - Lesson row → 1 item with auto-derived "Evens HW" / "Odds HW" title.
+ *  - Monday Test edge case: Study Guide cannot fall on Sunday — clamps to same
+ *    day (index 0) with note that it should have been distributed Friday prior.
+ */
+export async function expandMathRow(
+  dayIndex: number,
+  cell: PacingCell,
+  ctx: BuildContext,
+): Promise<BuiltAssignment[]> {
+  const out: BuiltAssignment[] = [];
+
+  if (cell.isTest) {
+    const test = await buildAssignmentForCell('Math', dayIndex, cell, ctx, { type: 'Test' });
+    if (test) out.push(test);
+
+    const fact = await buildAssignmentForCell('Math', dayIndex, cell, ctx, {
+      type: 'Fact Test',
+      isSynthetic: true,
+    });
+    if (fact) out.push(fact);
+
+    // Study Guide due previous weekday. If Monday Test, clamp to same day.
+    const sgOffset = dayIndex > 0 ? -1 : 0;
+    const sg = await buildAssignmentForCell('Math', dayIndex, cell, ctx, {
+      type: 'Study Guide',
+      isSynthetic: true,
+      dayOffset: sgOffset,
+    });
+    if (sg) out.push(sg);
+
+    return out;
+  }
+
+  // Standard Math homework — title auto-resolves to Evens/Odds via parity
+  const hw = await buildAssignmentForCell('Math', dayIndex, cell, ctx);
+  if (hw) out.push(hw);
+  return out;
+}
+
 export async function buildAssignmentForCell(
   subject: string,
   dayIndex: number,
