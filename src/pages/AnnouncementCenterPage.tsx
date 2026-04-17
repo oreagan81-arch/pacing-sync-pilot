@@ -92,15 +92,47 @@ export default function AnnouncementCenterPage() {
     const testRows = rows.filter(r => r.type?.toLowerCase().includes('test'));
     if (testRows.length === 0) { toast.info('No tests found this week'); return; }
 
+    const wordBank = (config.spellingWordBank || {}) as Record<string, string[]>;
+    const readingPhrases = config.autoLogic?.readingTestPhrases || ['tracking and tapping', '100 words per minute'];
+    const week = weeks.find(w => w.id === selectedWeekId);
+    const weekLabel = week ? `${week.quarter} Wk ${week.week_num}` : undefined;
+
+    // Together Logic: merge Reading + Spelling tests into ONE post to course 21919
+    const readingTest = testRows.find(r => r.subject === 'Reading');
+    const spellingTest = testRows.find(r => r.subject === 'Spelling');
     let created = 0;
+
+    if (readingTest || spellingTest) {
+      const title = buildCombinedTitle(weekLabel);
+      const body = renderCombinedReadingSpellingBody({
+        weekLabel,
+        reading: readingTest
+          ? { lessonNum: readingTest.lesson_num, readingTestPhrases: readingPhrases }
+          : undefined,
+        spelling: spellingTest && spellingTest.lesson_num
+          ? { testNum: parseInt(spellingTest.lesson_num) || 1, wordBank }
+          : undefined,
+      });
+      await supabase.from('announcements').insert({
+        week_id: selectedWeekId,
+        subject: 'Reading',
+        title,
+        content: body,
+        type: 'test_reminder',
+        status: 'DRAFT',
+        course_id: TOGETHER_LOGIC_COURSE_ID,
+        scheduled_post: getNextFriday4PM(),
+      });
+      created++;
+    }
+
+    // Other subject tests (Math, LA, etc.) — one per subject as before
     for (const row of testRows) {
-      const courseId = config.courseIds[row.subject];
+      if (row.subject === 'Reading' || row.subject === 'Spelling') continue;
+      const courseId = getCourseId(row.subject) || config.courseIds[row.subject];
       if (!courseId) continue;
 
-      let body = `${row.subject} ${row.type} ${row.lesson_num || ''} is coming up. Study and prepare!`;
-      if (row.subject === 'Reading') body = 'Remember: tracking and tapping, 100 words per minute. Practice daily.';
-      if (row.subject === 'Spelling') body = `Study words 21\u201325 from your cumulative word bank. Quiz on Friday.`;
-
+      const body = `<p>${row.subject} ${row.type} ${row.lesson_num || ''} is coming up. Study and prepare!</p>`;
       const title = `${row.subject} ${row.type} ${row.lesson_num || ''} \u2014 Reminder`.trim();
 
       await supabase.from('announcements').insert({
