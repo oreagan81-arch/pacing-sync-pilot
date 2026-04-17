@@ -11,6 +11,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
+import {
+  renderReadingTestBody,
+  renderSpellingTestBody,
+  renderCombinedReadingSpellingBody,
+  buildCombinedTitle,
+} from '@/lib/announcement-templates';
+import { TOGETHER_LOGIC_COURSE_ID, getCourseId } from '@/lib/course-ids';
 
 interface Announcement {
   id: string;
