@@ -63,6 +63,16 @@ export default function PageBuilderPage() {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
       if (data) setWeeks(data);
     });
+    supabase.from('content_map').select('lesson_ref, subject, canvas_url, canonical_name').then(({ data }) => {
+      if (data) setContentMap(data as ContentMapEntry[]);
+    });
+    supabase
+      .from('newsletters')
+      .select('homeroom_notes, birthdays')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setLatestNewsletter(data ?? null));
   }, []);
 
   useEffect(() => {
@@ -148,8 +158,28 @@ export default function PageBuilderPage() {
 
   // Generate HTML for active subject
   const generatedHtml = useMemo(() => {
-    if (!selectedWeek || subjectRows.length === 0 || !config) return '';
+    if (!selectedWeek || !config) return '';
     const quarterColor = config.quarterColors[selectedWeek.quarter] || '#0065a7';
+
+    if (activeSubject === 'Homeroom') {
+      // Collect upcoming tests across all subjects this week
+      const tests = rows
+        .filter((r) => r.type === 'Test' || (r.in_class || '').toLowerCase().includes('test'))
+        .map((r) => `${r.day}: ${r.subject}${r.lesson_num ? ` \u2014 ${r.lesson_num}` : ''}`);
+      return generateHomeroomPageHtml({
+        weekNum: selectedWeek.week_num,
+        quarter: selectedWeek.quarter,
+        dateRange: selectedWeek.date_range || '',
+        quarterColor,
+        reminders: selectedWeek.reminders || '',
+        resources: selectedWeek.resources || '',
+        homeroomNotes: latestNewsletter?.homeroom_notes || '',
+        birthdays: latestNewsletter?.birthdays || '',
+        upcomingTests: tests,
+      });
+    }
+
+    if (subjectRows.length === 0) return '';
     return generateCanvasPageHtml({
       subject: activeSubject === 'Reading' ? 'Reading & Spelling' : activeSubject,
       rows: subjectRows,
@@ -159,8 +189,9 @@ export default function PageBuilderPage() {
       reminders: selectedWeek.reminders || '',
       resources: selectedWeek.resources || '',
       quarterColor,
+      contentMap,
     });
-  }, [subjectRows, selectedWeek, activeSubject, config]);
+  }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter]);
 
   // Canvas page naming: Q4W2, Q3W5, etc.
   const getPageSlug = (quarter: string, weekNum: number) => {
