@@ -32,10 +32,15 @@ const SUBJECT_TYPES: Record<string, string[]> = {
   Math: ['Lesson', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
   Reading: ['Lesson', 'Test', 'Checkout', 'No Class', '-'],
   Spelling: ['Lesson', 'Test', 'No Class', '-'],
-  'Language Arts': ['Lesson', 'Test', 'No Class', '-'],
+  'Language Arts': ['Lesson', 'CP', 'Test', 'No Class', '-'],
   History: ['Lesson', 'Test', 'No Class', '-'],
   Science: ['Lesson', 'Test', 'No Class', '-'],
 };
+
+// Language Arts only deploys assignments for these types
+const LA_ASSIGNABLE_TYPES = new Set(['CP', 'Classroom Practice', 'Test']);
+const isLanguageArtsAssignable = (type: string | null | undefined) =>
+  LA_ASSIGNABLE_TYPES.has(type ?? '');
 
 interface DayData {
   type: string;
@@ -161,6 +166,8 @@ export default function PacingEntryPage({
           const isNoAssign =
             config?.autoLogic.historyScienceNoAssign && (subj === 'History' || subj === 'Science');
           const isFriday = day === 'Friday';
+          const isLA = subj === 'Language Arts';
+          const laBlocked = isLA && !isLanguageArtsAssignable(d.type);
           return {
             week_id: weekRow.id,
             subject: subj,
@@ -170,7 +177,7 @@ export default function PacingEntryPage({
             in_class: d.in_class || null,
             at_home: isFriday ? null : d.at_home || null,
             resources: d.resources || null,
-            create_assign: isNoAssign || isFriday ? false : d.create_assign,
+            create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
           };
         })
       );
@@ -482,6 +489,8 @@ export default function PacingEntryPage({
                     const isNoAssignSubject =
                       config?.autoLogic.historyScienceNoAssign &&
                       (subject === 'History' || subject === 'Science');
+                    const isLABlocked =
+                      subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
                     const hideAssign = isFriday || isNoAssignSubject;
                     const isEven = cell.lesson_num ? parseInt(cell.lesson_num) % 2 === 0 : null;
 
@@ -559,8 +568,8 @@ export default function PacingEntryPage({
                           {!hideAssign && (
                             <div className="flex items-center gap-2">
                               <Checkbox
-                                checked={isFriday && !isTest ? false : cell.create_assign}
-                                disabled={isFriday && !isTest}
+                                checked={(isFriday && !isTest) || isLABlocked ? false : cell.create_assign}
+                                disabled={(isFriday && !isTest) || isLABlocked}
                                 onCheckedChange={(v) =>
                                   updateCell(subject, day, 'create_assign', !!v)
                                 }
@@ -569,9 +578,20 @@ export default function PacingEntryPage({
                               <label
                                 htmlFor={`assign-${subject}-${day}`}
                                 className="text-[10px] text-muted-foreground"
-                                title={isFriday && !isTest ? 'Friday — assignments disabled (Tests OK)' : undefined}
+                                title={
+                                  isLABlocked
+                                    ? 'LA — only CP and Test create assignments'
+                                    : isFriday && !isTest
+                                    ? 'Friday — assignments disabled (Tests OK)'
+                                    : undefined
+                                }
                               >
-                                Create Assign{isFriday && !isTest ? ' (Friday locked)' : ''}
+                                Create Assign
+                                {isLABlocked
+                                  ? ' (CP/Test only)'
+                                  : isFriday && !isTest
+                                  ? ' (Friday locked)'
+                                  : ''}
                               </label>
                             </div>
                           )}
@@ -594,6 +614,11 @@ export default function PacingEntryPage({
                               </Badge>
                             )}
                             {hideAssign && cell.type && cell.type !== '-' && cell.type !== 'No Class' && (
+                              <Badge variant="secondary" className="text-[9px]">
+                                No Assignment
+                              </Badge>
+                            )}
+                            {isLABlocked && cell.type && cell.type !== '-' && cell.type !== 'No Class' && (
                               <Badge variant="secondary" className="text-[9px]">
                                 No Assignment
                               </Badge>

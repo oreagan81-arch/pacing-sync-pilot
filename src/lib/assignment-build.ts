@@ -187,6 +187,10 @@ export async function buildAssignmentForCell(
   if (auto?.historyScienceNoAssign && (subject === 'History' || subject === 'Science')) {
     skipReason = `${subject} — no assignments`;
   }
+  // Language Arts — only CP / Classroom Practice / Test produce assignments
+  if (subject === 'Language Arts' && !['CP', 'Classroom Practice', 'Test'].includes(type)) {
+    skipReason = 'LA — only CP and Test create assignments';
+  }
   if (cell.isNoClass) skipReason = 'No class';
 
   const description = buildDescription(
