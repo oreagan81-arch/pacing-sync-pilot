@@ -44,13 +44,15 @@ export async function loadConfig(): Promise<AppConfig> {
 
   if (error || !data) throw new Error('Failed to load system config');
 
+  const autoLogic = data.auto_logic as unknown as AutoLogic;
   return {
-    courseIds: data.course_ids as Record<string, number>,
+    // Hardcoded course IDs always win over DB values to prevent drift
+    courseIds: { ...(data.course_ids as Record<string, number>), ...COURSE_IDS },
     assignmentPrefixes: data.assignment_prefixes as Record<string, string>,
     quarterColors: data.quarter_colors as Record<string, string>,
     powerUpMap: data.power_up_map as Record<string, string>,
     spellingWordBank: data.spelling_word_bank as Record<string, string[]>,
-    autoLogic: data.auto_logic as unknown as AutoLogic,
+    autoLogic: { ...autoLogic, togetherLogicCourseId: TOGETHER_LOGIC_COURSE_ID },
     canvasBaseUrl: data.canvas_base_url || 'https://thalesacademy.instructure.com',
   };
 }
