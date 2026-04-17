@@ -8,7 +8,7 @@ import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriang
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
-import { generateCanvasPageHtml, generateHomeroomPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { generateCanvasPageHtml, generateHomeroomPageHtml, generateRedirectPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
@@ -29,6 +29,7 @@ interface WeekOption {
   date_range: string | null;
   reminders: string | null;
   resources: string | null;
+  active_hs_subject?: string | null;
 }
 
 interface DeployResult {
