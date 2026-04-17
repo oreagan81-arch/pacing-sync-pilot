@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { COURSE_IDS, TOGETHER_LOGIC_COURSE_ID } from './course-ids';
 
 export interface AutoLogic {
   mathEvenOdd: boolean;
