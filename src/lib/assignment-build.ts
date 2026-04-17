@@ -184,7 +184,8 @@ export async function buildAssignmentForCell(
   if (isFridayHomeworkBlocked(day, type)) {
     skipReason = FRIDAY_SKIP_REASON;
   }
-  if (auto?.historyScienceNoAssign && (subject === 'History' || subject === 'Science')) {
+  // History/Science: never create assignments (mandatory rule, not flag-gated)
+  if (subject === 'History' || subject === 'Science') {
     skipReason = `${subject} — no assignments`;
   }
   // Language Arts — only CP / Classroom Practice / Test produce assignments

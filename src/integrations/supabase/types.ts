@@ -557,6 +557,7 @@ export type Database = {
       }
       weeks: {
         Row: {
+          active_hs_subject: string | null
           created_at: string | null
           date_range: string | null
           id: string
@@ -567,6 +568,7 @@ export type Database = {
           week_num: number
         }
         Insert: {
+          active_hs_subject?: string | null
           created_at?: string | null
           date_range?: string | null
           id?: string
@@ -577,6 +579,7 @@ export type Database = {
           week_num: number
         }
         Update: {
+          active_hs_subject?: string | null
           created_at?: string | null
           date_range?: string | null
           id?: string

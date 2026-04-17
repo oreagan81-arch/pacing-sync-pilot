@@ -6,6 +6,39 @@
 
 import { applyBrevity } from './assignment-logic';
 import { injectFileLinks, injectAssignmentLink, type ContentMapEntry } from './auto-link';
+import { COURSE_IDS } from './course-ids';
+
+export interface RedirectPageParams {
+  thisSubject: 'History' | 'Science';
+  activeSubject: 'History' | 'Science';
+  weekNum: number;
+  quarter: string;
+  dateRange: string;
+  quarterColor: string;
+}
+
+/**
+ * Redirect-only Canvas page used when one of History/Science is the
+ * "active" subject for the week — the other subject's page tells students
+ * to visit the active course instead.
+ */
+export function generateRedirectPageHtml(params: RedirectPageParams): string {
+  const { thisSubject, activeSubject, weekNum, quarter, dateRange, quarterColor } = params;
+  const courseId = COURSE_IDS[activeSubject];
+  const courseUrl = `https://thalesacademy.instructure.com/courses/${courseId}`;
+  return `<div id="kl_wrapper_3" class="kl_circle_left kl_wrapper" style="border-style: none;">
+    <div id="kl_banner" class="">
+        <h2 class="" style="color: #ffffff; background-color: ${quarterColor}; text-align: center;"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${quarterColor};">${thisSubject} \u2014 Weekly Agenda</span></h2>
+        <p class="kl_subtitle">${quarter}, Week ${weekNum} | ${dateRange}</p>
+    </div>
+    <div id="kl_custom_block_0" class="">
+        <h3 style="background-color: ${quarterColor}; color: #ffffff; border-color: ${quarterColor};"><i class="fas fa-info" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>This Week</h3>
+        <p style="line-height: 1.6;">We are currently in <strong>${activeSubject}</strong>.</p>
+        <p style="line-height: 1.6;">Please visit the <a href="${courseUrl}" target="_blank">${activeSubject} Canvas course</a> for this week's agenda.</p>
+        <p>&nbsp;</p>
+    </div>
+</div>`;
+}
 
 export interface CanvasPageRow {
   day: string;

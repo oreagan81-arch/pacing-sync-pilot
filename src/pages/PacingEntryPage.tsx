@@ -94,6 +94,7 @@ export default function PacingEntryPage({
   const [resources, setResources] = useState('');
   const [saving, setSaving] = useState(false);
   const [sheetLoading, setSheetLoading] = useState(false);
+  const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
 
   // Compute risk on every change
@@ -151,7 +152,8 @@ export default function PacingEntryPage({
             date_range: dateRange,
             reminders,
             resources,
-          },
+            active_hs_subject: activeHsSubject === 'Both' ? null : activeHsSubject,
+          } as any,
           { onConflict: 'quarter,week_num' }
         )
         .select('id')
@@ -218,6 +220,7 @@ export default function PacingEntryPage({
       setDateRange(weekData2.date_range || '');
       setReminders(weekData2.reminders || '');
       setResources(weekData2.resources || '');
+      setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
     }
 
     if (rows) {
@@ -447,6 +450,34 @@ export default function PacingEntryPage({
             rows={3}
           />
         </div>
+      </div>
+
+      {/* Active H/S subject toggle */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/50 px-4 py-3">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Active H/S Subject
+        </label>
+        <div className="flex gap-1">
+          {(['Both', 'History', 'Science'] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setActiveHsSubject(opt)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                activeHsSubject === opt
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        {activeHsSubject !== 'Both' && (
+          <span className="text-xs text-muted-foreground">
+            The {activeHsSubject === 'History' ? 'Science' : 'History'} Canvas page will show a redirect to {activeHsSubject}.
+          </span>
+        )}
       </div>
 
       {/* Subject accordion sections */}
