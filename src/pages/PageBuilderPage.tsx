@@ -303,6 +303,7 @@ export default function PageBuilderPage() {
     setDeploying((p) => ({ ...p, [subject]: true }));
 
     try {
+      const contentHash = await sha256Hex(html);
       const result = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
         subject,
         courseId,
@@ -312,6 +313,7 @@ export default function PageBuilderPage() {
         published: true,
         setFrontPage: true,
         weekId: selectedWeekId || null,
+        contentHash,
       });
 
       if (result.status === 'DEPLOYED' || result.status === 'NO_CHANGE') {
