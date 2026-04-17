@@ -250,26 +250,43 @@ export default function PageBuilderPage() {
         upcomingTests: tests,
       });
     } else {
-      sRows = filterTogetherPageRows(rows, subject);
+      const activeHs = selectedWeek.active_hs_subject;
+      const isInactiveHs =
+        (subject === 'History' || subject === 'Science') && activeHs && activeHs !== subject;
 
-      if (sRows.length === 0) {
-        toast.error(`No data for ${subject}`);
-        return;
+      if (isInactiveHs) {
+        // Deploy redirect page instead of full agenda
+        courseId = config.courseIds[subject];
+        html = generateRedirectPageHtml({
+          thisSubject: subject as 'History' | 'Science',
+          activeSubject: activeHs as 'History' | 'Science',
+          weekNum: selectedWeek.week_num,
+          quarter: selectedWeek.quarter,
+          dateRange: selectedWeek.date_range || '',
+          quarterColor,
+        });
+      } else {
+        sRows = filterTogetherPageRows(rows, subject);
+
+        if (sRows.length === 0) {
+          toast.error(`No data for ${subject}`);
+          return;
+        }
+
+        courseId = resolveTogetherCourseId(subject) ?? config.courseIds[subject];
+
+        html = generateCanvasPageHtml({
+          subject: subject === 'Reading' ? 'Reading & Spelling' : subject,
+          rows: sRows,
+          quarter: selectedWeek.quarter,
+          weekNum: selectedWeek.week_num,
+          dateRange: selectedWeek.date_range || '',
+          reminders: selectedWeek.reminders || '',
+          resources: selectedWeek.resources || '',
+          quarterColor,
+          contentMap,
+        });
       }
-
-      courseId = resolveTogetherCourseId(subject) ?? config.courseIds[subject];
-
-      html = generateCanvasPageHtml({
-        subject: subject === 'Reading' ? 'Reading & Spelling' : subject,
-        rows: sRows,
-        quarter: selectedWeek.quarter,
-        weekNum: selectedWeek.week_num,
-        dateRange: selectedWeek.date_range || '',
-        reminders: selectedWeek.reminders || '',
-        resources: selectedWeek.resources || '',
-        quarterColor,
-        contentMap,
-      });
     }
 
     if (!courseId) {
@@ -307,12 +324,15 @@ export default function PageBuilderPage() {
   };
 
   const deployableSubjects = useMemo(() => {
+    const activeHs = selectedWeek?.active_hs_subject;
     return PAGE_SUBJECTS.filter((s) => {
       if (s === 'Homeroom') return true; // always deployable
+      // Inactive H/S still deploys (as a redirect page)
+      if ((s === 'History' || s === 'Science') && activeHs && activeHs !== s) return true;
       const sRows = filterTogetherPageRows(rows, s);
       return sRows.length > 0;
     });
-  }, [rows]);
+  }, [rows, selectedWeek]);
 
   // Deploy all pages with progress toast
   const handleDeployAll = async () => {
