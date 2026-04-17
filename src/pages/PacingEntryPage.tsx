@@ -32,10 +32,15 @@ const SUBJECT_TYPES: Record<string, string[]> = {
   Math: ['Lesson', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
   Reading: ['Lesson', 'Test', 'Checkout', 'No Class', '-'],
   Spelling: ['Lesson', 'Test', 'No Class', '-'],
-  'Language Arts': ['Lesson', 'Test', 'No Class', '-'],
+  'Language Arts': ['Lesson', 'CP', 'Test', 'No Class', '-'],
   History: ['Lesson', 'Test', 'No Class', '-'],
   Science: ['Lesson', 'Test', 'No Class', '-'],
 };
+
+// Language Arts only deploys assignments for these types
+const LA_ASSIGNABLE_TYPES = new Set(['CP', 'Classroom Practice', 'Test']);
+const isLanguageArtsAssignable = (type: string | null | undefined) =>
+  LA_ASSIGNABLE_TYPES.has(type ?? '');
 
 interface DayData {
   type: string;
