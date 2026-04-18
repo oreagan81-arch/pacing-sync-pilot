@@ -126,7 +126,7 @@ export default function MemoryPage() {
     const { error } = await supabase.from('teacher_memory').insert({
       category: p.pattern_type,
       key: p.subject ?? 'global',
-      value: p.rule as never,
+      value: p.rule as unknown as never,
       confidence: p.confidence,
       usage_count: p.applied_count,
     });
