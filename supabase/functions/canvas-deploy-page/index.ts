@@ -61,9 +61,29 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, supabaseKey);
 
-    // 0. HASH PRE-SKIP — fastest path. If client-provided hash matches the
-    // last-deployed hash recorded on weeks.page_hashes[subject], skip Canvas
-    // entirely.
+    const canvasHeaders = {
+      Authorization: `Bearer ${canvasToken}`,
+      "Content-Type": "application/json",
+    };
+
+    const courseBase = `${canvasBase}/api/v1/courses/${courseId}`;
+
+    // Helper: if Canvas page is a front_page but not published, return the
+    // corrective payload that re-asserts published:true. Returns null if no
+    // repair is needed. Front-page publish guard — every PUT touching a
+    // front_page MUST include published:true.
+    const assertFrontPagePublished = (pageData: { front_page?: boolean; published?: boolean } | null) => {
+      if (!pageData) return null;
+      if (pageData.front_page === true && pageData.published === false) {
+        return { wiki_page: { front_page: true, published: true } };
+      }
+      return null;
+    };
+
+    // 0. HASH PRE-SKIP — fast path. If the client-provided hash matches the
+    // stored hash, we still GET Canvas once to detect manual drift on
+    // front_page pages (e.g., teacher unpublished it directly in Canvas) and
+    // auto-repair before skipping.
     if (weekId && subject && contentHash) {
       const { data: weekRow } = await sb
         .from("weeks")
@@ -72,30 +92,62 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const storedHash = (weekRow?.page_hashes as Record<string, string> | null)?.[subject];
       if (storedHash && storedHash === contentHash) {
-        await sb.from("deploy_log").insert({
-          week_id: weekId,
-          subject,
-          action: "page_deploy",
-          status: "NO_CHANGE",
-          canvas_url: `${canvasBase}/courses/${courseId}/pages/${pageUrl}`,
-          message: "Hash match — skipped without Canvas GET",
-        });
+        const driftRes = await fetchWithRetry(`${courseBase}/pages/${pageUrl}`, { headers: canvasHeaders });
+        let repaired = false;
+        if (driftRes.ok) {
+          const driftData = await driftRes.json();
+          const repairPayload = assertFrontPagePublished(driftData);
+          if (repairPayload) {
+            const repairRes = await fetchWithRetry(`${courseBase}/pages/${pageUrl}`, {
+              method: "PUT",
+              headers: canvasHeaders,
+              body: JSON.stringify(repairPayload),
+            });
+            repaired = repairRes.ok;
+            await sb.from("deploy_log").insert({
+              week_id: weekId,
+              subject,
+              action: "page_deploy",
+              status: repaired ? "REPAIRED" : "ERROR",
+              canvas_url: `${canvasBase}/courses/${courseId}/pages/${pageUrl}`,
+              message: repaired
+                ? "Hash match — front_page was unpublished, re-published"
+                : "Hash match — repair PUT failed",
+            });
+            if (repaired) {
+              await sb.from("deploy_notifications").insert({
+                title: `Front page re-published — ${subject}`,
+                message: `${pageTitle} was unpublished in Canvas; auto-repaired.`,
+                level: "warn",
+                entity_ref: `${subject}:${pageUrl}`,
+              });
+            }
+          }
+        } else {
+          await driftRes.text();
+        }
+
+        if (!repaired) {
+          await sb.from("deploy_log").insert({
+            week_id: weekId,
+            subject,
+            action: "page_deploy",
+            status: "NO_CHANGE",
+            canvas_url: `${canvasBase}/courses/${courseId}/pages/${pageUrl}`,
+            message: "Hash match — skipped (front-page state OK)",
+          });
+        }
+
         return new Response(JSON.stringify({
-          status: "NO_CHANGE",
+          status: repaired ? "REPAIRED" : "NO_CHANGE",
           canvasUrl: `${canvasBase}/courses/${courseId}/pages/${pageUrl}`,
           skipReason: "hash_match",
+          repaired,
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
-
-    const canvasHeaders = {
-      Authorization: `Bearer ${canvasToken}`,
-      "Content-Type": "application/json",
-    };
-
-    const courseBase = `${canvasBase}/api/v1/courses/${courseId}`;
 
     // 1. GET page to check existence + front_page
     const getRes = await fetchWithRetry(`${courseBase}/pages/${pageUrl}`, { headers: canvasHeaders });
