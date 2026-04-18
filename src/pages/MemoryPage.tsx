@@ -105,7 +105,7 @@ export default function MemoryPage() {
     }
     const { error } = await supabase
       .from('teacher_memory')
-      .update({ value: parsed })
+      .update({ value: parsed as unknown as never })
       .eq('id', editing.id);
     if (error) return toast.error('Save failed: ' + error.message);
     toast.success('Memory updated');
