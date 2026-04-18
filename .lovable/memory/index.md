@@ -32,5 +32,6 @@ Updated: just now
 - [Content Map Registry](mem://db/content-map-registry) — Auto-linking lesson identifiers to Canvas files and Orphan detection
 - [Reading + Spelling Together Logic](mem://business-rules/together-logic) — Shared course/page/announcement, separate assignments, Spelling Test N=1..N×5
 - [Friday Rules](mem://business-rules/friday-rules) — Mandatory: no At Home, no homework, create_assign=false, DB trigger enforced; 4 PM ET reminder exception
+- [Three-Layer Rule Enforcement](mem://business-rules/three-layer-enforcement) — Builder + Edge guard + DB trigger defense-in-depth for Friday/LA/History/Science/Math Triple
 - [Zero-Touch Automation](mem://features/zero-touch-automation) — Cron schedule (Friday deploy, nightly maintenance, daily summary), 3-attempt retry with backoff, /automation page
 - [Teacher Memory Layer](mem://features/teacher-memory-layer) — Capture-resolve loop: logs edits, scores patterns, applies via Memory > Templates > AI precedence
