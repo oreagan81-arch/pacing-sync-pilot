@@ -15,6 +15,7 @@ import AssignmentsPage from '@/pages/AssignmentsPage';
 import AnnouncementCenterPage from '@/pages/AnnouncementCenterPage';
 import NewsletterPage from '@/pages/NewsletterPage';
 import FileOrganizerPage from '@/pages/FileOrganizerPage';
+import ContentRegistryPage from '@/pages/ContentRegistryPage';
 import HealthMonitorPage from '@/pages/HealthMonitorPage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFound from '@/pages/NotFound';
@@ -77,6 +78,7 @@ function AppContent({ config }: { config: AppConfig }) {
           <Route path="/announcements" element={<AnnouncementCenterPage />} />
           <Route path="/newsletter" element={<NewsletterPage />} />
           <Route path="/files" element={<FileOrganizerPage />} />
+          <Route path="/content-registry" element={<ContentRegistryPage />} />
           <Route path="/health" element={<HealthMonitorPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />

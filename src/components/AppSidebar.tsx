@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Eye,
   ShieldCheck,
+  Library,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -37,6 +38,7 @@ const navItems = [
   { title: 'Announcements', url: '/announcements', icon: Megaphone },
   { title: 'Newsletter', url: '/newsletter', icon: Mail },
   { title: 'File Organizer', url: '/files', icon: FolderSearch },
+  { title: 'Content Registry', url: '/content-registry', icon: Library },
   { title: 'Health Monitor', url: '/health', icon: Activity },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
