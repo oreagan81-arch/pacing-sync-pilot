@@ -1,72 +1,65 @@
 
-The user is asking for a consolidated summary deliverable of everything built across this session: Content Registry, Teacher Memory Layer, Zero-Touch Automation, and the Front-Page Publish Guard. This is a documentation/inventory request, not new code.
+## Audit: 20-File Request vs Existing Repo
 
-I'll present a concise inventory grouped by their requested categories, referencing the actual files that exist in the project.
+Your prompt's first rule is **"DO NOT REBUILD EXISTING APP SHELL"** — but the 20-file list largely duplicates what already ships. Honest accounting:
 
-## Deliverable: Production Inventory
+### Already exist (different names)
+| Requested | Existing |
+|---|---|
+| PagesCenterPage | `PageBuilderPage` |
+| AssignmentsCenterPage | `AssignmentsPage` |
+| FileCenterPage | `FileOrganizerPage` |
+| TeacherMemoryPage | `MemoryPage` |
+| SystemHealthPage | `HealthMonitorPage` |
+| canvasService | `lib/canvas-html.ts` + `lib/edge.ts` |
+| contentEngine | `lib/assignment-build.ts` + `lib/announcement-templates.ts` |
+| fileEngine | `supabase/functions/canvas-file-rename` + `file-classify` |
+| deploy_queue / system_logs | `automation_jobs` / `deploy_log` |
+| settings table | `system_config` |
 
-### 1. Updated Files
-- `src/App.tsx` — routes for `/content-registry`, `/memory`, `/automation`
-- `src/components/AppSidebar.tsx` — nav entries (Library, Brain, Zap icons)
-- `src/lib/assignment-build.ts` — memory resolver wired into title build
-- `src/pages/AnnouncementCenterPage.tsx` — `logEdit` on draft save
-- `src/pages/AssignmentsPage.tsx` — `logEdit` on title change + deploy timestamp
-- `src/pages/PageBuilderPage.tsx` — `logEdit` on HTML edit + deploy timestamp
-- `src/pages/FileOrganizerPage.tsx` — `logEdit` on rename, resolver on suggestion
-- `supabase/functions/canvas-deploy-page/index.ts` — front-page publish guard, hash-skip GET, `assertFrontPagePublished` helper, REPAIRED logging
-- `.lovable/memory/index.md` — registry for new memory files
+### Already exist (same name)
+DashboardPage, AnnouncementCenterPage, SettingsPage, every requested DB table except `deploy_queue` / `system_logs`.
 
-### 2. New Files
-**Libraries**
-- `src/lib/teacher-memory.ts` — `logEdit`, `learnFromEdit`, `logDeployHabit`
-- `src/lib/memory-resolver.ts` — Memory > Templates > AI precedence
+### Genuinely missing
+1. `src/components/dashboard/QuickStats.tsx`
+2. `src/components/dashboard/UpcomingPosts.tsx`
+3. `src/components/files/FileRenameCard.tsx` (logic is currently inline)
+4. `src/components/memory/ConfidenceMeter.tsx` (rendered inline in MemoryPage)
+5. `src/components/announcements/AnnouncementPreview.tsx` (inline in AnnouncementCenterPage)
+6. `src/hooks/useCanvas.ts` — React Query wrappers around `callEdge`
+7. `src/hooks/useAnnouncements.ts` — list / draft / post / schedule
+8. `src/hooks/useTeacherMemory.ts` — patterns / hits / log
+9. `src/types/thales.ts` — curated domain types (Subject, Day, BuiltAssignment, etc.) re-exported from existing modules
+10. `DashboardPage` upgrade: mount QuickStats + UpcomingPosts widgets
 
-**Pages**
-- `src/pages/ContentRegistryPage.tsx` — 5-tab registry (Sync, Map, Missing, Rename, Health)
-- `src/pages/MemoryPage.tsx` — 5-tab memory dashboard
-- `src/pages/AutomationPage.tsx` — jobs, failures, run-now controls
+### Should NOT do
+- Rename `PageBuilderPage` → `PagesCenterPage`: breaks `/page-builder` route, sidebar, all internal links
+- Add `deploy_queue` / `system_logs` tables: duplicates `automation_jobs` / `deploy_log` and forces dual-writes
+- Replace `lib/*` with new `services/*`: identical behavior, two import paths to maintain
+- Re-implement Friday cron, retry engine, three-layer enforcement, front-page guard, together logic — already shipped this session
 
-**Memory docs**
-- `.lovable/memory/features/teacher-memory-layer.md`
-- `.lovable/memory/features/zero-touch-automation.md`
-- `.lovable/memory/db/content-map-registry.md`
+## Plan: Additive Build (10 net-new files, 1 edited)
 
-### 3. SQL Migrations (already applied)
-- `pg_cron` schedules:
-  - `automation-friday-deploy` — `0 21 * * 5` (Fri 4 PM ET)
-  - `automation-nightly` — `0 7 * * *` (2 AM ET)
-  - `automation-daily-summary` — `30 11 * * *` (6:30 AM ET)
-  - `friday-publish` — existing
-- Seeded `automation_jobs` rows for the four jobs (job_name, schedule, enabled=true)
-- Tables relied on (pre-existing): `content_map`, `files`, `teacher_memory`, `teacher_feedback_log`, `teacher_patterns`, `automation_jobs`, `system_health_snapshots`, `deploy_notifications`, `deploy_log`
+**New files**
+- `src/components/dashboard/QuickStats.tsx` — pulls from `system_health_snapshots`, `pacing_rows`, `automation_jobs`. Cards: Pending Deploys, Failed Jobs, Orphan Files, Health Score.
+- `src/components/dashboard/UpcomingPosts.tsx` — `announcements` where `status='SCHEDULED'` ordered by `scheduled_post`. Subject color chips.
+- `src/components/files/FileRenameCard.tsx` — single-file rename row, props `{ file, onApprove, onSkip }`. Used by FileOrganizerPage refactor (non-breaking, opt-in).
+- `src/components/memory/ConfidenceMeter.tsx` — bar 0-1, color thresholds (red <0.4, amber 0.4-0.6, emerald ≥0.6) matching theme.
+- `src/components/announcements/AnnouncementPreview.tsx` — renders title + content + scheduled time + course chip; reusable in AnnouncementCenter and Dashboard.
+- `src/hooks/useCanvas.ts` — `useDeployPage`, `useDeployAssignment`, `useFilesSync` (React Query mutations wrapping `callEdge`).
+- `src/hooks/useAnnouncements.ts` — `useAnnouncementsList`, `useDraftAnnouncement`, `useScheduleAnnouncement`, `usePostNow`.
+- `src/hooks/useTeacherMemory.ts` — `useMemoryPatterns`, `useMemoryHits`, `useEditHistory`.
+- `src/types/thales.ts` — `Subject`, `Day`, `AssignmentType`, `PacingRow`, `BuiltAssignment`, `AnnouncementDraft`, `MemoryHit` re-exported from existing modules; single import surface.
+- *(no new migration — existing tables cover everything)*
 
-### 4. Edge Functions
-**New**
-- `supabase/functions/_shared/retry.ts` — `runWithRetry` (3 attempts, backoff `[2s, 8s, 30s]`, error logging + notification)
-- `supabase/functions/automation-friday-deploy/index.ts` — next-week deploy orchestrator
-- `supabase/functions/automation-nightly/index.ts` — files sync + mapping repair + memory train + health snapshot
-- `supabase/functions/automation-daily-summary/index.ts` — 6:30 AM teacher briefing
+**Edited**
+- `src/pages/DashboardPage.tsx` — mount `<QuickStats />` and `<UpcomingPosts />`. Existing copy/structure preserved.
 
-**Hardened**
-- `supabase/functions/canvas-deploy-page/index.ts` — front-page guard on hash-skip and body-compare branches
+## Subject Color Tokens
+Your prompt specifies Math=orange, Reading=blue, ELA=green, Science=purple, History=navy, Homeroom=gray. Current theme uses subject neutral chips. I'll add a `subjectColor(subject)` helper inside `types/thales.ts` returning Tailwind classes from the existing palette (`text-orange-400`, `text-blue-400`, etc.) — used by `UpcomingPosts`, `AnnouncementPreview`, future widgets.
 
-**Pre-existing, untouched**
-- `canvas-deploy-assignment`, `canvas-files-sync`, `canvas-file-rename`, `canvas-post-announcement`, `canvas-deployer`, `file-classify`, `file-vision-classify`, `friday-publish`, `gas-dispatch`, `newsletter-extract`, `pacing-parse`, `sheets-import`
-
-### 5. React Components / Pages
-- `ContentRegistryPage` — Sync | Content Map | Missing Files | Rename Queue | Registry Health
-- `MemoryPage` — Learned Patterns | Edit History | Suggested Patterns | Deploy Habits | Stats
-- `AutomationPage` — Active Jobs | Run Now | Recent Failures | Activity Timeline
-
-### 6. Integration Notes
-- **Memory precedence**: every builder calls `resolve(category, key, fallback)` from `memory-resolver.ts`. Memory wins at confidence ≥ 0.6, otherwise fallback to template, then AI.
-- **Confidence math**: `new = old + (1 - old) * 0.3` per repeated edit; usage_count incremented; reverts decay.
-- **Retry contract**: every cron-invoked edge function wraps its body in `runWithRetry({ jobName })`. On final failure: `automation_jobs.status='error'` + `deploy_notifications` (level=error) + `deploy_log` (status=ERROR).
-- **Front-page guard**: every code path touching a Canvas page must `GET` first; if `front_page === true` and `published === false`, fire repair `PUT { wiki_page: { front_page: true, published: true } }` and log `REPAIRED`.
-- **Cron timing**: ET conversions assume EDT (UTC−4). EST (UTC−5) shifts each job 1h later in local time; acceptable.
-- **Realtime**: `useRealtimeDeploy` subscribes to `deploy_notifications` so cron-driven toasts appear without page reload.
-- **Friday rules**: `enforce_friday_rules` DB trigger remains the source of truth; `automation-friday-deploy` honors it because it goes through the same `canvas-deploy-assignment` path.
-- **Idempotency**: page deploys use SHA-256 content hash skip; assignment deploys compare body fields; both safe to re-run.
-- **Secrets in use**: `CANVAS_API_TOKEN`, `CANVAS_BASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `LOVABLE_API_KEY`. All present.
-
-No further build work in this turn — this is the inventory of what is already in production.
+## Verify
+- Open `/` → see Pending Deploys, Failed Jobs, Orphan Files, Health Score; see next 5 scheduled announcements with subject colors
+- Open `/announcements` → preview component renders identically (visual parity)
+- Open `/memory` → confidence bars render with new color thresholds
+- TypeScript: zero new errors, all existing routes intact
