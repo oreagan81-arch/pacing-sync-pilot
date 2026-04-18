@@ -31,6 +31,7 @@ import {
   type BuiltAssignment,
 } from '@/lib/assignment-build';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import { logDeployHabit } from '@/lib/teacher-memory';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'];
 const FILTER_CHIPS = ['All', 'Math', 'Reading', 'Language Arts', 'Spelling'];
@@ -251,7 +252,10 @@ export default function AssignmentsPage() {
             contentHash: r.contentHash,
           },
         );
-        if (res.status === 'DEPLOYED') { results[r.rowKey] = 'DEPLOYED'; ok++; }
+        if (res.status === 'DEPLOYED') {
+          results[r.rowKey] = 'DEPLOYED'; ok++;
+          void logDeployHabit(r.subject);
+        }
         else if (res.status === 'NO_CHANGE') { results[r.rowKey] = 'NO_CHANGE'; skip++; }
         else { results[r.rowKey] = 'ERROR'; fail++; }
       } catch {
