@@ -9,6 +9,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { evaluateWeekRisk, type RiskRow } from '@/lib/risk-engine';
+import { QuickStats } from '@/components/dashboard/QuickStats';
+import { UpcomingPosts } from '@/components/dashboard/UpcomingPosts';
 
 interface WeekSummary {
   weekId: string;
@@ -178,61 +180,11 @@ export default function DashboardPage({
         </p>
       </div>
 
-      {/* Top stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/pacing')}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase">Pacing Rows</p>
-                <p className="text-2xl font-bold">{weekSummary?.totalRows || 0}</p>
-              </div>
-              <BookOpen className="h-8 w-8 text-muted-foreground/40" />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Top stat cards — system-wide signals */}
+      <QuickStats />
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/pages')}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase">Deployed</p>
-                <p className="text-2xl font-bold text-success">{weekSummary?.deployedCount || 0}</p>
-              </div>
-              <CheckCircle2 className="h-8 w-8 text-success/40" />
-            </div>
-            {(weekSummary?.pendingCount || 0) > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {weekSummary?.pendingCount} pending
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/announcements')}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase">Draft Announcements</p>
-                <p className="text-2xl font-bold">{stats.announcements}</p>
-              </div>
-              <Megaphone className="h-8 w-8 text-muted-foreground/40" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/files')}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase">Unclassified Files</p>
-                <p className="text-2xl font-bold">{stats.files}</p>
-              </div>
-              <FileText className="h-8 w-8 text-muted-foreground/40" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Upcoming scheduled posts */}
+      <UpcomingPosts limit={5} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Risk Score */}
