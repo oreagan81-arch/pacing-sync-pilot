@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { callEdge } from '@/lib/edge';
 import { useSystemStore } from '@/store/useSystemStore';
+import { logEdit, learnFromEdit } from '@/lib/teacher-memory';
 
 interface FileRecord {
   id: string;
@@ -154,6 +155,7 @@ export default function FileOrganizerPage() {
   const handleManualUpdate = async (id: string, field: string, value: string) => {
     const update: any = { [field]: value, confidence: 'manual' };
     const file = files.find(f => f.id === id);
+    const before = file ? { ...file } : null;
     if (file) {
       const subj = field === 'subject' ? value : (file.subject || '');
       const typ = field === 'type' ? value : (file.type || '');
@@ -161,6 +163,11 @@ export default function FileOrganizerPage() {
       if (subj && typ && les) update.friendly_name = generateFriendlyName(subj, typ, les);
     }
     await supabase.from('files').update(update).eq('id', id);
+    if (file) {
+      const after = { ...file, ...update };
+      void logEdit('file', id, before as never, after as never, 'rename');
+      void learnFromEdit('file', before as never, after as never);
+    }
     loadFiles();
   };
 
