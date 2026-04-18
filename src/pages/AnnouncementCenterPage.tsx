@@ -3,22 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Megaphone, Clock, Send, Plus, Trash2, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Megaphone, Clock, Send, Plus, Trash2, RefreshCw, Loader2, CheckCircle2, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useConfig } from '@/lib/config';
+import { useConfig, type AppConfig } from '@/lib/config';
 import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
-import {
-  renderReadingTestBody,
-  renderSpellingTestBody,
-  renderCombinedReadingSpellingBody,
-  buildCombinedTitle,
-} from '@/lib/announcement-templates';
+import { expandSpellingTest } from '@/lib/together-logic';
 import { TOGETHER_LOGIC_COURSE_ID, getCourseId } from '@/lib/course-ids';
 
+// ────────────────────────────────────────────────────────────────────────────
+// Types
+// ────────────────────────────────────────────────────────────────────────────
 interface Announcement {
   id: string;
   title: string | null;
@@ -39,25 +39,79 @@ interface WeekOption {
   week_num: number;
 }
 
+interface PacingRow {
+  id: string;
+  week_id: string | null;
+  subject: string;
+  day: string;
+  type: string | null;
+  lesson_num: string | null;
+  in_class: string | null;
+  at_home: string | null;
+  canvas_url: string | null;
+  object_id: string | null;
+}
+
+interface DraftInsert {
+  week_id: string | null;
+  subject: string;
+  title: string;
+  content: string;
+  type: string;
+  status: 'DRAFT';
+  course_id: number | null;
+  scheduled_post: string | null;
+}
+
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 
+// Subject color tokens (4px left border + accent text)
+const SUBJECT_BORDER: Record<string, string> = {
+  Math: 'border-l-orange-500',
+  Reading: 'border-l-blue-500',
+  Spelling: 'border-l-blue-500',
+  'Language Arts': 'border-l-emerald-500',
+  Science: 'border-l-purple-500',
+  History: 'border-l-sky-500',
+  Homeroom: 'border-l-primary',
+};
+
+const SUBJECT_HEX: Record<string, string> = {
+  Math: '#ea580c',
+  Reading: '#2563eb',
+  Spelling: '#2563eb',
+  'Language Arts': '#10b981',
+  Science: '#9333ea',
+  History: '#0284c7',
+  Homeroom: '#475569',
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Component
+// ────────────────────────────────────────────────────────────────────────────
 export default function AnnouncementCenterPage() {
   const config = useConfig();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [weeks, setWeeks] = useState<WeekOption[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [posting, setPosting] = useState<Record<string, boolean>>({});
   const [postingAll, setPostingAll] = useState(false);
 
-  // New announcement form
+  // Manual create form
   const [showForm, setShowForm] = useState(false);
   const [formSubject, setFormSubject] = useState('');
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formType, setFormType] = useState('test_reminder');
 
-  // Realtime: refresh announcements when deploy log shows announcement_post
+  // Reading Mastery quick-create dialog
+  const [showRM, setShowRM] = useState(false);
+  const [rmTestNum, setRmTestNum] = useState('');
+  const [rmTestDate, setRmTestDate] = useState('');
+  const [rmCheckoutLesson, setRmCheckoutLesson] = useState('');
+
   const handleRealtimeEvent = useCallback(() => {
     loadAnnouncements(selectedWeekId || undefined);
   }, [selectedWeekId]);
@@ -81,104 +135,232 @@ export default function AnnouncementCenterPage() {
     loadAnnouncements(selectedWeekId || undefined);
   }, [selectedWeekId]);
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // PART 1: Automation Engine
+  // ──────────────────────────────────────────────────────────────────────────
   const handleAutoGenerate = async () => {
     if (!selectedWeekId || !config) {
       toast.error('Select a week first');
       return;
     }
-    const { data: rows } = await supabase.from('pacing_rows').select('*').eq('week_id', selectedWeekId);
-    if (!rows || rows.length === 0) { toast.info('No pacing data for this week'); return; }
+    setGenerating(true);
+    try {
+      const { data: rows } = await supabase
+        .from('pacing_rows')
+        .select('id, week_id, subject, day, type, lesson_num, in_class, at_home, canvas_url, object_id')
+        .eq('week_id', selectedWeekId);
 
-    const testRows = rows.filter(r => r.type?.toLowerCase().includes('test'));
-    if (testRows.length === 0) { toast.info('No tests found this week'); return; }
+      if (!rows || rows.length === 0) {
+        toast.info('No pacing data for this week');
+        setGenerating(false);
+        return;
+      }
 
-    const wordBank = (config.spellingWordBank || {}) as Record<string, string[]>;
-    const readingPhrases = config.autoLogic?.readingTestPhrases || ['tracking and tapping', '100 words per minute'];
-    const week = weeks.find(w => w.id === selectedWeekId);
-    const weekLabel = week ? `${week.quarter} Wk ${week.week_num}` : undefined;
+      const week = weeks.find((w) => w.id === selectedWeekId);
+      const weekLabel = week ? `${week.quarter} Wk ${week.week_num}` : '';
+      const drafts: DraftInsert[] = [];
 
-    // Together Logic: merge Reading + Spelling tests into ONE post to course 21919
-    const readingTest = testRows.find(r => r.subject === 'Reading');
-    const spellingTest = testRows.find(r => r.subject === 'Spelling');
-    let created = 0;
+      // ─── A. Math Test Logic (Early Friday + Urgent Wednesday) ──────────
+      const mathTests = rows.filter((r) => r.subject === 'Math' && /test/i.test(r.type || ''));
+      for (const mt of mathTests) {
+        const lesson = mt.lesson_num || '';
+        const powerUp = lesson ? config.powerUpMap[lesson] || '' : '';
+        const factTest = lesson ? `Fact Test ${lesson}` : 'Fact Test';
+        const studyGuideUrl = mt.canvas_url || '';
 
-    if (readingTest || spellingTest) {
-      const title = buildCombinedTitle(weekLabel);
-      const body = renderCombinedReadingSpellingBody({
-        weekLabel,
-        reading: readingTest
-          ? { lessonNum: readingTest.lesson_num, readingTestPhrases: readingPhrases }
-          : undefined,
-        spelling: spellingTest && spellingTest.lesson_num
-          ? { testNum: parseInt(spellingTest.lesson_num) || 1, wordBank }
-          : undefined,
-      });
-      await supabase.from('announcements').insert({
+        // Early draft → previous Friday 4 PM ET
+        drafts.push({
+          week_id: selectedWeekId,
+          subject: 'Math',
+          type: 'test_reminder',
+          status: 'DRAFT',
+          course_id: getCourseId('Math'),
+          scheduled_post: getPreviousFriday4PM(),
+          title: `🔢 Heads Up: Math Test — Lesson ${lesson} (${mt.day})`,
+          content: buildMathEarlyHtml({ lesson, day: mt.day, powerUp, factTest, studyGuideUrl, weekLabel }),
+        });
+
+        // Urgent draft → Wednesday before test 4 PM ET
+        drafts.push({
+          week_id: selectedWeekId,
+          subject: 'Math',
+          type: 'test_reminder',
+          status: 'DRAFT',
+          course_id: getCourseId('Math'),
+          scheduled_post: getWednesdayBefore(mt.day),
+          title: `⚠️ Tomorrow-ish: Math Test Lesson ${lesson}`,
+          content: buildMathUrgentHtml({ lesson, day: mt.day, powerUp, factTest, studyGuideUrl }),
+        });
+      }
+
+      // ─── B. Reading + Spelling Together Logic ──────────────────────────
+      const readingTest = rows.find((r) => r.subject === 'Reading' && /test/i.test(r.type || ''));
+      const spellingTest = rows.find((r) => r.subject === 'Spelling' && /test/i.test(r.type || ''));
+      if (readingTest || spellingTest) {
+        const rNum = readingTest?.lesson_num || '';
+        const sNum = parseInt(spellingTest?.lesson_num || '0', 10) || 0;
+        const dateStr = readingTest?.day || spellingTest?.day || 'this week';
+        const spellingExp = sNum > 0
+          ? expandSpellingTest(sNum, (config.spellingWordBank || {}) as Record<string, string[]>)
+          : null;
+
+        drafts.push({
+          week_id: selectedWeekId,
+          subject: 'Reading',
+          type: 'test_reminder',
+          status: 'DRAFT',
+          course_id: TOGETHER_LOGIC_COURSE_ID,
+          scheduled_post: getNextFriday4PM(),
+          title: `📚 Reading Mastery Test ${rNum} and Fluency Checkout: ${dateStr}`,
+          content: buildReadingSpellingHtml({
+            testNum: rNum,
+            testDate: dateStr,
+            checkoutLesson: rNum,
+            spellingFocus: spellingExp?.focusWords || [],
+            spellingTestNum: sNum || null,
+          }),
+        });
+      }
+
+      // ─── C. Language Arts Weekly Summary ───────────────────────────────
+      const laRows = rows.filter((r) => r.subject === 'Language Arts');
+      if (laRows.length > 0) {
+        drafts.push({
+          week_id: selectedWeekId,
+          subject: 'Language Arts',
+          type: 'weekly_summary',
+          status: 'DRAFT',
+          course_id: getCourseId('Language Arts'),
+          scheduled_post: getNextFriday4PM(),
+          title: `✏️ Language Arts — ${weekLabel} Overview`,
+          content: buildSubjectSummaryHtml('Language Arts', laRows, weekLabel),
+        });
+      }
+
+      // ─── C2. History OR Science (whichever is active) ──────────────────
+      const histRows = rows.filter((r) => r.subject === 'History');
+      const sciRows = rows.filter((r) => r.subject === 'Science');
+      const hsActive = histRows.length >= sciRows.length ? histRows : sciRows;
+      const hsSubject = histRows.length >= sciRows.length ? 'History' : 'Science';
+      if (hsActive.length > 0) {
+        drafts.push({
+          week_id: selectedWeekId,
+          subject: hsSubject,
+          type: 'weekly_summary',
+          status: 'DRAFT',
+          course_id: getCourseId(hsSubject),
+          scheduled_post: getNextFriday4PM(),
+          title: `${hsSubject === 'History' ? '🏛️' : '🔬'} ${hsSubject} — ${weekLabel} Overview`,
+          content: buildSubjectSummaryHtml(hsSubject, hsActive, weekLabel),
+        });
+      }
+
+      // ─── D. Homeroom Weekly Update ─────────────────────────────────────
+      drafts.push({
         week_id: selectedWeekId,
+        subject: 'Homeroom',
+        type: 'weekly_summary',
+        status: 'DRAFT',
+        course_id: 22254,
+        scheduled_post: getNextFriday4PM(),
+        title: `🏠 Homeroom Weekly Update — ${weekLabel}`,
+        content: buildHomeroomHtml(rows, weekLabel),
+      });
+
+      if (drafts.length === 0) {
+        toast.info('No triggers matched this week');
+        setGenerating(false);
+        return;
+      }
+
+      const { error } = await supabase.from('announcements').insert(drafts);
+      if (error) throw error;
+
+      toast.success(`Auto-generated ${drafts.length} announcement(s)`);
+      loadAnnouncements(selectedWeekId);
+    } catch (e: any) {
+      toast.error('Auto-generate failed', { description: e.message });
+    }
+    setGenerating(false);
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Reading Mastery Quick Create
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleRMSubmit = async () => {
+    if (!rmTestNum || !rmTestDate) {
+      toast.error('Test number and date required');
+      return;
+    }
+    try {
+      const html = buildReadingSpellingHtml({
+        testNum: rmTestNum,
+        testDate: rmTestDate,
+        checkoutLesson: rmCheckoutLesson || rmTestNum,
+        spellingFocus: [],
+        spellingTestNum: null,
+      });
+      const { error } = await supabase.from('announcements').insert({
+        week_id: selectedWeekId || null,
         subject: 'Reading',
-        title,
-        content: body,
         type: 'test_reminder',
         status: 'DRAFT',
         course_id: TOGETHER_LOGIC_COURSE_ID,
         scheduled_post: getNextFriday4PM(),
+        title: `📚 Reading Mastery Test ${rmTestNum} and Fluency Checkout: ${rmTestDate}`,
+        content: html,
       });
-      created++;
+      if (error) throw error;
+      toast.success('Reading Mastery draft created');
+      setShowRM(false);
+      setRmTestNum(''); setRmTestDate(''); setRmCheckoutLesson('');
+      loadAnnouncements(selectedWeekId || undefined);
+    } catch (e: any) {
+      toast.error('Create failed', { description: e.message });
     }
-
-    // Other subject tests (Math, LA, etc.) — one per subject as before
-    for (const row of testRows) {
-      if (row.subject === 'Reading' || row.subject === 'Spelling') continue;
-      const courseId = getCourseId(row.subject) || config.courseIds[row.subject];
-      if (!courseId) continue;
-
-      const body = `<p>${row.subject} ${row.type} ${row.lesson_num || ''} is coming up. Study and prepare!</p>`;
-      const title = `${row.subject} ${row.type} ${row.lesson_num || ''} \u2014 Reminder`.trim();
-
-      await supabase.from('announcements').insert({
-        week_id: selectedWeekId,
-        subject: row.subject,
-        title,
-        content: body,
-        type: 'test_reminder',
-        status: 'DRAFT',
-        course_id: courseId,
-        scheduled_post: getNextFriday4PM(),
-      });
-      created++;
-    }
-    toast.success(`Auto-generated ${created} announcement(s)`);
-    loadAnnouncements(selectedWeekId);
   };
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Manual create / delete / post (preserved)
+  // ──────────────────────────────────────────────────────────────────────────
   const handleCreate = async () => {
     if (!formTitle || !formSubject) { toast.error('Title and subject required'); return; }
-    const courseId = config?.courseIds[formSubject];
-    await supabase.from('announcements').insert({
-      week_id: selectedWeekId || null,
-      subject: formSubject,
-      title: formTitle,
-      content: formContent,
-      type: formType,
-      status: 'DRAFT',
-      course_id: courseId || null,
-      scheduled_post: getNextFriday4PM(),
-    });
-    toast.success('Announcement created');
-    setShowForm(false);
-    setFormTitle(''); setFormContent(''); setFormSubject('');
-    loadAnnouncements(selectedWeekId || undefined);
+    try {
+      const courseId = config?.courseIds[formSubject];
+      const { error } = await supabase.from('announcements').insert({
+        week_id: selectedWeekId || null,
+        subject: formSubject,
+        title: formTitle,
+        content: formContent,
+        type: formType,
+        status: 'DRAFT',
+        course_id: courseId || null,
+        scheduled_post: getNextFriday4PM(),
+      });
+      if (error) throw error;
+      toast.success('Announcement created');
+      setShowForm(false);
+      setFormTitle(''); setFormContent(''); setFormSubject('');
+      loadAnnouncements(selectedWeekId || undefined);
+    } catch (e: any) {
+      toast.error('Create failed', { description: e.message });
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('announcements').delete().eq('id', id);
-    setAnnouncements(prev => prev.filter(a => a.id !== id));
-    toast.success('Deleted');
+    try {
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) throw error;
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      toast.success('Deleted');
+    } catch (e: any) {
+      toast.error('Delete failed', { description: e.message });
+    }
   };
 
   const handlePost = async (ann: Announcement) => {
     if (!ann.course_id || !ann.title) { toast.error('Missing course ID or title'); return; }
-    setPosting(p => ({ ...p, [ann.id]: true }));
+    setPosting((p) => ({ ...p, [ann.id]: true }));
     try {
       await callEdge('canvas-post-announcement', {
         courseId: ann.course_id,
@@ -194,37 +376,28 @@ export default function AnnouncementCenterPage() {
     } catch (e: any) {
       toast.error('Post failed', { description: e.message });
     }
-    setPosting(p => ({ ...p, [ann.id]: false }));
+    setPosting((p) => ({ ...p, [ann.id]: false }));
   };
 
   const handlePostAll = async () => {
-    const drafts = announcements.filter(a => a.status === 'DRAFT');
+    const drafts = announcements.filter((a) => a.status === 'DRAFT');
     if (drafts.length === 0) { toast.info('No drafts to post'); return; }
     setPostingAll(true);
-    const toastId = toast.loading(`Posting 0/${drafts.length} announcements\u2026`);
+    const toastId = toast.loading(`Posting 0/${drafts.length} announcements…`);
     let done = 0;
     let errors = 0;
-
     for (const ann of drafts) {
-      toast.loading(`Posting "${ann.title}" (${done + 1}/${drafts.length})\u2026`, { id: toastId });
-      try {
-        await handlePost(ann);
-      } catch {
-        errors++;
-      }
+      toast.loading(`Posting "${ann.title}" (${done + 1}/${drafts.length})…`, { id: toastId });
+      try { await handlePost(ann); } catch { errors++; }
       done++;
     }
-
-    if (errors > 0) {
-      toast.warning(`Posted ${done - errors}/${drafts.length} (${errors} failed)`, { id: toastId });
-    } else {
-      toast.success(`All ${drafts.length} announcements posted! \u2705`, { id: toastId });
-    }
+    if (errors > 0) toast.warning(`Posted ${done - errors}/${drafts.length} (${errors} failed)`, { id: toastId });
+    else toast.success(`All ${drafts.length} announcements posted! ✅`, { id: toastId });
     setPostingAll(false);
   };
 
-  const draftCount = announcements.filter(a => a.status === 'DRAFT').length;
-  const postedCount = announcements.filter(a => a.status === 'POSTED').length;
+  const draftCount = announcements.filter((a) => a.status === 'DRAFT').length;
+  const postedCount = announcements.filter((a) => a.status === 'POSTED').length;
 
   const statusColor = (s: string | null) => {
     if (s === 'POSTED') return 'bg-success text-success-foreground';
@@ -250,25 +423,54 @@ export default function AnnouncementCenterPage() {
               <CheckCircle2 className="h-3 w-3" /> {postedCount} posted
             </Badge>
           )}
-          <Select value={selectedWeekId || '__all__'} onValueChange={v => setSelectedWeekId(v === '__all__' ? '' : v)}>
+          <Select value={selectedWeekId || '__all__'} onValueChange={(v) => setSelectedWeekId(v === '__all__' ? '' : v)}>
             <SelectTrigger className="w-40"><SelectValue placeholder="All weeks" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">All weeks</SelectItem>
-              {weeks.map(w => <SelectItem key={w.id} value={w.id}>{w.quarter} Wk {w.week_num}</SelectItem>)}
+              {weeks.map((w) => <SelectItem key={w.id} value={w.id}>{w.quarter} Wk {w.week_num}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={handleAutoGenerate} className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" /> Auto-Generate
+          <Button variant="outline" size="sm" onClick={handleAutoGenerate} disabled={generating} className="gap-1.5">
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Auto-Generate
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowRM(true)} className="gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" /> Reading Mastery
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowForm(!showForm)} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" /> New
           </Button>
           <Button size="sm" onClick={handlePostAll} disabled={postingAll || draftCount === 0} className="gap-1.5">
             {postingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            {postingAll ? 'Posting\u2026' : 'Post All Drafts'}
+            {postingAll ? 'Posting…' : 'Post All Drafts'}
           </Button>
         </div>
       </div>
+
+      {/* Reading Mastery quick-create dialog */}
+      <Dialog open={showRM} onOpenChange={setShowRM}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reading Mastery Quick Create</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Test Number</Label>
+              <Input value={rmTestNum} onChange={(e) => setRmTestNum(e.target.value)} placeholder="e.g. 12" />
+            </div>
+            <div>
+              <Label>Test Date</Label>
+              <Input value={rmTestDate} onChange={(e) => setRmTestDate(e.target.value)} placeholder="e.g. Friday, Oct 18" />
+            </div>
+            <div>
+              <Label>Checkout Passage Lesson</Label>
+              <Input value={rmCheckoutLesson} onChange={(e) => setRmCheckoutLesson(e.target.value)} placeholder="defaults to test number" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRM(false)}>Cancel</Button>
+            <Button onClick={handleRMSubmit}>Create Draft</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showForm && (
         <Card className="border-primary/20 shadow-md">
@@ -277,7 +479,7 @@ export default function AnnouncementCenterPage() {
               <Select value={formSubject} onValueChange={setFormSubject}>
                 <SelectTrigger><SelectValue placeholder="Subject" /></SelectTrigger>
                 <SelectContent>
-                  {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={formType} onValueChange={setFormType}>
@@ -289,8 +491,8 @@ export default function AnnouncementCenterPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Input placeholder="Title" value={formTitle} onChange={e => setFormTitle(e.target.value)} />
-            <Textarea placeholder="Message body..." value={formContent} onChange={e => setFormContent(e.target.value)} rows={3} />
+            <Input placeholder="Title" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} />
+            <Textarea placeholder="Message body..." value={formContent} onChange={(e) => setFormContent(e.target.value)} rows={3} />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleCreate}>Create</Button>
               <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
@@ -309,56 +511,223 @@ export default function AnnouncementCenterPage() {
             <Megaphone className="h-10 w-10 mx-auto mb-3 opacity-20" />
             <p className="text-sm">No announcements yet. Auto-generate from test data or create manually.</p>
           </CardContent></Card>
-        ) : announcements.map(ann => (
-          <Card key={ann.id} className={`transition-all ${ann.status === 'POSTED' ? 'opacity-70' : ''}`}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Megaphone className="h-4 w-4 text-primary" />
-                  {ann.title}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">{ann.subject}</Badge>
-                  <Badge className={`text-xs ${statusColor(ann.status)}`}>{ann.status}</Badge>
+        ) : announcements.map((ann) => {
+          const borderClass = SUBJECT_BORDER[ann.subject || ''] || 'border-l-muted';
+          return (
+            <Card key={ann.id} className={`transition-all border-l-4 ${borderClass} ${ann.status === 'POSTED' ? 'opacity-70' : ''}`}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Megaphone className="h-4 w-4 text-primary" />
+                    {ann.title}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{ann.subject}</Badge>
+                    <Badge className={`text-xs ${statusColor(ann.status)}`}>{ann.status}</Badge>
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{ann.content}</p>
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {ann.scheduled_post ? new Date(ann.scheduled_post).toLocaleString() : 'Not scheduled'}
-                  </span>
-                  {ann.posted_at && <span className="text-success">Posted {new Date(ann.posted_at).toLocaleString()}</span>}
-                </div>
-                <div className="flex gap-2">
-                  {ann.status === 'DRAFT' && (
-                    <Button size="sm" variant="outline" onClick={() => handlePost(ann)} disabled={posting[ann.id]} className="gap-1 text-xs">
-                      {posting[ann.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                      Post
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground line-clamp-3" dangerouslySetInnerHTML={{ __html: ann.content || '' }} />
+                {ann.status === 'DRAFT' && ann.scheduled_post && (
+                  <p className="text-xs text-muted-foreground mt-2 italic">
+                    Scheduled: {formatScheduled(ann.scheduled_post)}
+                  </p>
+                )}
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {ann.scheduled_post ? new Date(ann.scheduled_post).toLocaleString() : 'Not scheduled'}
+                    </span>
+                    {ann.posted_at && <span className="text-success">Posted {new Date(ann.posted_at).toLocaleString()}</span>}
+                  </div>
+                  <div className="flex gap-2">
+                    {ann.status === 'DRAFT' && (
+                      <Button size="sm" variant="outline" onClick={() => handlePost(ann)} disabled={posting[ann.id]} className="gap-1 text-xs">
+                        {posting[ann.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                        Post
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(ann.id)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="h-3 w-3" />
                     </Button>
-                  )}
-                  <Button size="sm" variant="ghost" onClick={() => handleDelete(ann.id)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function getNextFriday4PM(): string {
+// ────────────────────────────────────────────────────────────────────────────
+// PART 2: HTML Template Builders (Canvas + Cidi Labs DesignPlus safe)
+// ────────────────────────────────────────────────────────────────────────────
+function wrapper(subject: string, inner: string): string {
+  const color = SUBJECT_HEX[subject] || '#475569';
+  return `<div class="kl_wrapper" style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;border-top:6px solid ${color};padding:16px;background:#ffffff;">${inner}</div>`;
+}
+function banner(subject: string, title: string): string {
+  const color = SUBJECT_HEX[subject] || '#475569';
+  return `<div class="kl_banner" style="background:${color};color:#fff;padding:14px 18px;border-radius:6px;margin-bottom:16px;"><h2 style="margin:0;font-size:20px;">${title}</h2></div>`;
+}
+
+interface MathArgs { lesson: string; day: string; powerUp: string; factTest: string; studyGuideUrl: string; weekLabel?: string; }
+
+function buildMathEarlyHtml(a: MathArgs): string {
+  const link = a.studyGuideUrl
+    ? `<p><a href="${a.studyGuideUrl}" style="color:#ea580c;font-weight:600;">📄 Study Guide</a></p>`
+    : '';
+  return wrapper('Math', `
+    ${banner('Math', `Math Test Coming Up — Lesson ${a.lesson}`)}
+    <p>Hi parents, a heads up that <strong>Math Test ${a.lesson}</strong> is scheduled for <strong>${a.day}</strong>.</p>
+    <ul>
+      <li><strong>Power Up:</strong> ${a.powerUp || '—'}</li>
+      <li><strong>Fact Test:</strong> ${a.factTest}</li>
+    </ul>
+    ${link}
+    <p>Please review the study guide together this weekend so students walk in confident.</p>
+  `);
+}
+
+function buildMathUrgentHtml(a: MathArgs): string {
+  const link = a.studyGuideUrl
+    ? `<p><a href="${a.studyGuideUrl}" style="color:#ea580c;font-weight:600;">📄 Study Guide</a></p>`
+    : '';
+  return wrapper('Math', `
+    ${banner('Math', `⚠️ Math Test ${a.lesson} — ${a.day}`)}
+    <p><strong>Quick reminder:</strong> the Math Test is just a couple days away.</p>
+    <ul>
+      <li><strong>Power Up:</strong> ${a.powerUp || '—'}</li>
+      <li><strong>Fact Test:</strong> ${a.factTest}</li>
+    </ul>
+    ${link}
+    <p>Tonight is a great night for one focused review pass.</p>
+  `);
+}
+
+interface RSArgs {
+  testNum: string;
+  testDate: string;
+  checkoutLesson: string;
+  spellingFocus: string[];
+  spellingTestNum: number | null;
+}
+
+function buildReadingSpellingHtml(a: RSArgs): string {
+  const spellingBlock = a.spellingTestNum && a.spellingFocus.length
+    ? `
+      <h3 style="color:#2563eb;margin-top:20px;">Spelling Test ${a.spellingTestNum}</h3>
+      <p><strong>Focus Words (21–25):</strong> ${a.spellingFocus.join(', ')}</p>
+    `
+    : '';
+  return wrapper('Reading', `
+    ${banner('Reading', `Reading Mastery Test ${a.testNum} — ${a.testDate}`)}
+    <p>Good afternoon, I hope you are having a great week so far!</p>
+    <p>The mastery test will cover story details, background information, and vocabulary from our recent lessons. Students will also be reading a timed fluency passage.</p>
+    <p><strong>Fluency goal:</strong> The goal of this fluency check is to read 100 words in one minute with 2 or fewer errors.</p>
+    <p>Make sure they are tracking and tapping so they do not miss any words or skip lines. Practice reading with your child every day, especially out loud.</p>
+    <p>For practice, the checkout passage will come from lesson ${a.checkoutLesson}, reading up to the flower.</p>
+    ${spellingBlock}
+  `);
+}
+
+function buildSubjectSummaryHtml(subject: string, rows: PacingRow[], weekLabel: string): string {
+  const items = rows
+    .filter((r) => r.in_class)
+    .map((r) => `<li><strong>${r.day}:</strong> ${escapeHtml(r.in_class || '')}${r.at_home ? ` <em>(at home: ${escapeHtml(r.at_home)})</em>` : ''}</li>`)
+    .join('');
+  return wrapper(subject, `
+    ${banner(subject, `${subject} — ${weekLabel}`)}
+    <p>Here is what we are covering in ${subject} this week:</p>
+    <ul>${items || '<li>Continued practice from prior lessons.</li>'}</ul>
+  `);
+}
+
+function buildHomeroomHtml(rows: PacingRow[], weekLabel: string): string {
+  const subjects = Array.from(new Set(rows.map((r) => r.subject))).filter(Boolean);
+  const sections = subjects.map((sub) => {
+    const subRows = rows.filter((r) => r.subject === sub && r.in_class);
+    if (subRows.length === 0) return '';
+    const color = SUBJECT_HEX[sub] || '#475569';
+    const lis = subRows.map((r) => `<li><strong>${r.day}:</strong> ${escapeHtml(r.in_class || '')}</li>`).join('');
+    return `<h3 style="color:${color};margin-top:18px;border-bottom:2px solid ${color};padding-bottom:4px;">${sub}</h3><ul>${lis}</ul>`;
+  }).join('');
+  return wrapper('Homeroom', `
+    ${banner('Homeroom', `Homeroom Weekly Update — ${weekLabel}`)}
+    <p>Here is a quick look at what each subject is doing this week.</p>
+    ${sections}
+    <p style="margin-top:18px;">As always, reach out anytime with questions.</p>
+  `);
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+}
+
+function formatScheduled(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PART 4: Scheduling Utilities (America/New_York)
+// ────────────────────────────────────────────────────────────────────────────
+/** Eastern Time offset in hours for a given date (handles DST). */
+function etOffsetHours(date: Date): number {
+  // Use Intl to find ET offset; -5 EST or -4 EDT
+  const dtf = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' });
+  const parts = dtf.formatToParts(date);
+  const tz = parts.find((p) => p.type === 'timeZoneName')?.value || 'EST';
+  return tz === 'EDT' ? -4 : -5;
+}
+
+/** Build an ISO string for a given Y/M/D at HH:00 ET. */
+function etDateAt(year: number, month: number, day: number, hour: number): string {
+  const tmp = new Date(Date.UTC(year, month, day, hour, 0, 0));
+  const offset = etOffsetHours(tmp);
+  return new Date(Date.UTC(year, month, day, hour - offset, 0, 0)).toISOString();
+}
+
+export function getNextFriday4PM(): string {
   const now = new Date();
   const day = now.getDay();
   const daysUntilFriday = (5 - day + 7) % 7 || 7;
-  const friday = new Date(now);
-  friday.setDate(now.getDate() + daysUntilFriday);
-  friday.setHours(16, 0, 0, 0);
-  return friday.toISOString();
+  const target = new Date(now);
+  target.setDate(now.getDate() + daysUntilFriday);
+  return etDateAt(target.getFullYear(), target.getMonth(), target.getDate(), 16);
+}
+
+export function getPreviousFriday4PM(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const daysSinceFriday = (day - 5 + 7) % 7 || 7;
+  const target = new Date(now);
+  target.setDate(now.getDate() - daysSinceFriday);
+  return etDateAt(target.getFullYear(), target.getMonth(), target.getDate(), 16);
+}
+
+const DAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+export function getWednesdayBefore(testDay: string): string {
+  const targetDow = DAY_INDEX[testDay] ?? 5;
+  const now = new Date();
+  const today = now.getDay();
+  // Find next occurrence of test day
+  const daysUntilTest = (targetDow - today + 7) % 7 || 7;
+  const test = new Date(now);
+  test.setDate(now.getDate() + daysUntilTest);
+  // Walk back to Wednesday before that test
+  const back = (test.getDay() - 3 + 7) % 7 || 7;
+  const wed = new Date(test);
+  wed.setDate(test.getDate() - back);
+  return etDateAt(wed.getFullYear(), wed.getMonth(), wed.getDate(), 16);
 }
