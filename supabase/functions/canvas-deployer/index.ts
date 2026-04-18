@@ -3,6 +3,7 @@
 // Handles: Assignments, Agenda Pages, Announcements, Front Page Protection
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,7 +100,9 @@ class CanvasDeployer {
   private token: string;
 
   constructor(baseUrl: string, token: string) {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
+    let normalized = baseUrl.trim();
+    if (!normalized.startsWith("http")) normalized = `https://${normalized}`;
+    this.baseUrl = normalized.replace(/\/+$/, "");
     this.token = token;
   }
 
@@ -529,6 +532,53 @@ serve(async (req) => {
     }
 
     const deployer = new CanvasDeployer(CANVAS_URL, CANVAS_TOKEN);
+
+    // ── Course Mapping Drift Assertion (log-only, non-blocking) ──
+    // Compares the deployer's canonical COURSE_IDS against system_config.course_ids
+    // and emits a warn notification if they diverge. Code wins; this just surfaces drift.
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && serviceKey) {
+        const sb = createClient(supabaseUrl, serviceKey);
+        const { data: cfg } = await sb
+          .from("system_config")
+          .select("course_ids")
+          .eq("id", "current")
+          .maybeSingle();
+        const dbIds = (cfg?.course_ids as Record<string, number> | null) ?? {};
+        // Alias map: deployer uses "LA"; system_config uses "Language Arts"
+        const aliasToConfig: Record<string, string> = { LA: "Language Arts" };
+        const drifts: Array<{ subject: string; code: number; db: number | null }> = [];
+        for (const [subject, codeId] of Object.entries(COURSE_IDS)) {
+          const dbKey = aliasToConfig[subject] ?? subject;
+          const dbId = dbIds[dbKey] ?? null;
+          if (dbId !== null && dbId !== codeId) {
+            drifts.push({ subject, code: codeId, db: dbId });
+          }
+        }
+        if (drifts.length > 0) {
+          const summary = drifts
+            .map((d) => `${d.subject}: code=${d.code} db=${d.db}`)
+            .join("; ");
+          console.warn("[course-id-drift]", summary);
+          await sb.from("deploy_notifications").insert({
+            level: "warn",
+            title: "Course ID drift detected",
+            message: `Canonical code differs from system_config: ${summary}. Code wins.`,
+            entity_ref: "system_config:course_ids",
+          });
+          await sb.from("deploy_log").insert({
+            action: "course_id_drift_check",
+            status: "WARN",
+            message: summary,
+            payload: { drifts } as unknown as Record<string, unknown>,
+          });
+        }
+      }
+    } catch (driftErr) {
+      console.error("[course-id-drift] check failed:", driftErr);
+    }
 
     if (action === "deploy") {
       // Risk check
