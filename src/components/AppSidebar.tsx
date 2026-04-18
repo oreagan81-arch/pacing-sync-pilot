@@ -11,6 +11,7 @@ import {
   Eye,
   ShieldCheck,
   Library,
+  Brain,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -40,6 +41,7 @@ const navItems = [
   { title: 'File Organizer', url: '/files', icon: FolderSearch },
   { title: 'Content Registry', url: '/content-registry', icon: Library },
   { title: 'Health Monitor', url: '/health', icon: Activity },
+  { title: 'Memory', url: '/memory', icon: Brain },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 

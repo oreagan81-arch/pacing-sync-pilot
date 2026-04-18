@@ -18,6 +18,7 @@ import FileOrganizerPage from '@/pages/FileOrganizerPage';
 import ContentRegistryPage from '@/pages/ContentRegistryPage';
 import HealthMonitorPage from '@/pages/HealthMonitorPage';
 import SettingsPage from '@/pages/SettingsPage';
+import MemoryPage from '@/pages/MemoryPage';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -81,6 +82,7 @@ function AppContent({ config }: { config: AppConfig }) {
           <Route path="/content-registry" element={<ContentRegistryPage />} />
           <Route path="/health" element={<HealthMonitorPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/memory" element={<MemoryPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </DashboardLayout>
