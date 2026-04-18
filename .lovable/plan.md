@@ -1,89 +1,89 @@
 
 Audit:
-- ✅ `content_map` table exists (subject, lesson_ref, type, canonical_name, canvas_file_id, canvas_url)
-- ✅ `files` table exists with classification fields + `confidence` (regex/ai/ai-vision/manual/unclassified)
-- ✅ `FileOrganizerPage` already does AI classify + orphan detection vs pacing
-- ✅ Edge fns: `file-classify`, `file-vision-classify`
-- ⚠️ No Canvas Files API sync — need new edge fn `canvas-files-sync`
-- ⚠️ No `content_map` UI — table is referenced by `auto-link.ts` but no management page
-- ⚠️ No "rename queue" workflow (rename in Canvas via PUT /api/v1/files/:id)
-- ⚠️ No registry health view
-- ⚠️ Missing-files detection currently only on FileOrganizerPage (against pacing); needs to also check `content_map` coverage
+- ✅ `teacher_memory` table exists: category, key, value (jsonb), confidence, usage_count, last_used
+- ✅ `teacher_feedback_log` table exists: entity_type, entity_id, action, before/after (jsonb), diff_summary
+- ✅ `teacher_patterns` table exists: pattern_type, subject, rule (jsonb), confidence, applied_count
+- ⚠️ Nothing writes to these tables yet
+- ⚠️ No `/memory` route or page
+- ⚠️ No memory-first lookup in any builder (page/assignment/announcement/file)
 
-## Plan: Content Registry System
+## Plan: Teacher Memory Layer
 
-### 1. DB migration
-Add to `content_map`:
-- `slug text` — short identifier (e.g. `sm5-l078`)
-- `confidence text` — regex/ai/manual
-- `auto_linked boolean default false` — whether it's wired into pages/announcements
-- `last_synced timestamptz`
-- Unique index on `(subject, lesson_ref, type)`
+### 1. Capture layer — `src/lib/teacher-memory.ts` (new)
+Single utility module with:
+- `logEdit(entityType, entityId, before, after, action)` — writes to `teacher_feedback_log` with field-level `diff_summary`
+- `learnFromEdit(entityType, before, after)` — extracts patterns into `teacher_memory`:
+  - **page_title**: `{ category: 'page_title', key: '<subject>:<Q#W#>', value: { template } }`
+  - **assignment_name**: `{ category: 'assignment_name', key: '<subject>:<type>', value: { titlePattern } }` — e.g. learns user prefers `SM5 Lesson 78 Test` over `SM5 Test — Lesson 78`
+  - **announcement_wording**: `{ category: 'announcement_phrase', key: '<subject>:<type>', value: { opener, closer, signoff } }` — extracts opener/closer text deltas
+  - **file_name**: `{ category: 'file_naming', key: '<subject>:<type>', value: { pattern } }`
+  - **page_layout**: `{ category: 'page_section_order', key: '<subject>', value: { order: ['banner','reminders','resources','days'] } }`
+  - **deploy_habit**: `{ category: 'deploy_timing', key: '<subject>:<dayOfWeek>', value: { hourET } }` — tracks when teacher actually clicks deploy
+- Confidence math: increment `usage_count`, raise `confidence` toward 1.0 with each repeat (`new = old + (1-old)*0.3`), decay if reverted
 
-Add to `files`:
-- `slug text`
-- `canvas_url text` — direct download
-- `needs_rename boolean default false` — true when `original_name !== friendly_name`
-- `renamed_at timestamptz`
+### 2. Lookup layer — `src/lib/memory-resolver.ts` (new)
+Universal `resolve(category, key, fallback)`:
+1. **Memory first**: query `teacher_memory` by category+key, return if `confidence >= 0.6`
+2. **Templates next**: existing builders (e.g. `buildAssignmentTitle`, `buildMathEarlyHtml`)
+3. **AI fallback**: only when neither matches
 
-### 2. New edge function: `canvas-files-sync`
-- GET `/api/v1/courses/{id}/files?per_page=100` paginated for each course in `system_config.course_ids`
-- Upsert into `files` table by `drive_file_id` (Canvas file ID)
-- Run regex classifier; if no match, queue for AI vision
-- For high-confidence matches (regex or ai≥0.85), upsert into `content_map` with `auto_linked=true` and generate slug
-- Returns: `{ synced, classified, mapped, needsReview }`
+Wire into existing builders (minimal touch, just prepend a resolver call):
+- `assignment-build.ts` → `buildAssignmentTitle()` checks memory first
+- `canvas-html.ts` → page title + section order check memory
+- `AnnouncementCenterPage.tsx` → opener/closer phrases check memory
+- `FileOrganizerPage.tsx` → friendly_name suggestion checks memory
 
-### 3. New edge function: `canvas-file-rename`
-- PUT `/api/v1/files/{id}` with `name: friendly_name`
-- Updates `files.original_name`, sets `renamed_at`, clears `needs_rename`
-- Logs to `deploy_log`
+### 3. Capture hooks (instrumentation)
+Add `logEdit` calls at the actual edit points:
+- `AssignmentsPage.tsx` — when row title is manually edited before deploy
+- `PageBuilderPage.tsx` — when generated HTML is edited before deploy
+- `AnnouncementCenterPage.tsx` — when draft content is edited before post
+- `FileOrganizerPage.tsx` — when friendly_name is renamed
+- All deploy buttons — log timestamp to derive `deploy_habit`
 
-### 4. New page: `src/pages/ContentRegistryPage.tsx`
+After `logEdit`, fire-and-forget `learnFromEdit` (no UI block).
+
+### 4. New page — `src/pages/MemoryPage.tsx` + route `/memory`
 Five tabs (shadcn `Tabs`):
 
-**Sync tab**
-- Big "Sync Canvas Files" button → calls `canvas-files-sync`
-- Per-course progress + last-sync timestamp
-- Result summary cards: synced / classified / needs review
+**Learned Patterns**
+- Group `teacher_memory` by category, sortable table: Category | Key | Value preview | Confidence bar | Usage Count | Last Used | [Edit] [Forget]
+- Inline edit `value` JSON; "Forget" deletes the row
 
-**Content Map tab**
-- Table of `content_map` entries: Subject | Lesson Ref | Type | Slug | Canonical Name | Canvas Link | Confidence | Auto-linked toggle
-- Inline edit slug + canonical name
-- Filter by subject
+**Edit History**
+- `teacher_feedback_log` table newest first: Date | Entity | Action | Diff Summary | [View Before/After] expandable
 
-**Missing Files tab**
-- Cross-references `pacing_rows` with `content_map` for the current quarter
-- Shows: Subject | Lesson | Day | Week | Expected Type | "🔴 Missing"
-- Same logic as existing FileOrganizerPage orphan check, expanded across all weeks
+**Suggested Patterns**
+- Auto-derived from `teacher_patterns` where `confidence >= 0.5` but not yet promoted
+- "Promote to Memory" button → copies to `teacher_memory`, "Reject" → deletes
 
-**Rename Queue tab**
-- Lists `files` where `needs_rename = true`
-- Columns: Original Name → Friendly Name | Subject | Confidence | [Rename in Canvas] button
-- Bulk "Rename All" action
+**Deploy Habits**
+- Heatmap (day × hour ET) of when teacher actually deploys, learned from `deploy_habit` memories
+- Suggested cron schedule
 
-**Registry Health tab**
-- Stats cards: Total mapped / Coverage % (mapped / expected from pacing) / Unclassified count / Orphan count / Needs rename count
-- Confidence breakdown chart (regex vs AI vs manual)
-- "Last full sync" timestamp
+**Stats**
+- Total memories | Total edits logged | Top corrected entities | Memory hit rate (resolved-from-memory / total builds — tracked via lightweight counter in localStorage or new `memory_hits` log)
 
-### 5. Auto-link wiring (already exists)
-`src/lib/auto-link.ts` already reads `content_map` — confirm `injectFileLinks` is called wherever Canvas HTML/announcements are built. Add note in memory.
+### 5. Sidebar + route
+- `App.tsx` add `/memory` route
+- `AppSidebar.tsx` add nav entry with `Brain` icon
 
-### 6. Add route + sidebar entry
-- Route `/content-registry` in `App.tsx`
-- Sidebar item in `AppSidebar.tsx` with `Library` icon
-
-### 7. Memory update
-Update `mem://db/content-map-registry` with: slug field, confidence, auto-link toggle, sync flow.
+### 6. Memory file
+Create `mem://features/teacher-memory-layer.md` describing capture → resolve flow, table roles, and `Memory > Templates > AI` precedence.
 
 ### Files
-1. Migration: `content_map` (slug, confidence, auto_linked, last_synced) + `files` (slug, canvas_url, needs_rename, renamed_at)
-2. `supabase/functions/canvas-files-sync/index.ts` (new)
-3. `supabase/functions/canvas-file-rename/index.ts` (new)
-4. `src/pages/ContentRegistryPage.tsx` (new, 5 tabs)
-5. `src/App.tsx` — add route
-6. `src/components/AppSidebar.tsx` — add nav entry
-7. `mem://db/content-map-registry` — update flow notes
+1. `src/lib/teacher-memory.ts` (new) — capture + learning
+2. `src/lib/memory-resolver.ts` (new) — lookup with precedence
+3. `src/pages/MemoryPage.tsx` (new) — 5 tabs
+4. `src/App.tsx` — route
+5. `src/components/AppSidebar.tsx` — nav entry
+6. `src/lib/assignment-build.ts` — wire resolver into title build
+7. `src/lib/canvas-html.ts` — wire resolver into page title
+8. `src/pages/AnnouncementCenterPage.tsx` — wire resolver + logEdit on save
+9. `src/pages/AssignmentsPage.tsx` — logEdit on title change + deploy timestamp
+10. `src/pages/PageBuilderPage.tsx` — logEdit on HTML edit + deploy timestamp
+11. `src/pages/FileOrganizerPage.tsx` — logEdit on rename, resolver on suggestion
+12. `mem://features/teacher-memory-layer.md` (new)
 
 ### Verify
-Open Content Registry → Sync tab → click Sync. Confirm files populate from all 6 Canvas courses. Switch to Content Map → confirm regex-classified files (e.g. SM5_L078) auto-mapped with slug `sm5-l078`. Drop an ugly filename like `scan_001.pdf` → appears in Rename Queue with AI-suggested friendly name. Click Rename → Canvas file gets renamed, row leaves queue. Missing Files tab lists pacing rows with no content_map match. Registry Health shows coverage %.
+Open Assignments, edit a Math Test title from `SM5 Test — Lesson 78` to `SM5 L78 Mastery Test`, deploy. Open `/memory` → Edit History shows the diff; Learned Patterns shows new `assignment_name:Math:Test` row at confidence ~0.3. Edit a second Math Test the same way → confidence rises to ~0.5. On the third Math Test, the auto-built title should now use the learned pattern (confidence ≥ 0.6). Same flow for announcement opener changes and file renames.
