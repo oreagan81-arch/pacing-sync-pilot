@@ -21,6 +21,7 @@ export default function CanvasBrainPage() {
   const lastSync = useLastSync();
   const changes = useDetectedChanges();
   const sync = useSyncNow();
+  const confidence = useStyleConfidence();
 
   const groupedPatterns = (patterns.data ?? []).reduce<Record<string, typeof patterns.data>>(
     (acc, p) => {
