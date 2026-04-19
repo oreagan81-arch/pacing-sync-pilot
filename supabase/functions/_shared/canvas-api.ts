@@ -1,0 +1,116 @@
+// Shared Canvas REST API client (read-only).
+// Handles base URL normalization, pagination via Link headers, and 429/5xx retry.
+
+const RAW_BASE = Deno.env.get('CANVAS_BASE_URL') ?? 'https://thalesacademy.instructure.com';
+const TOKEN = Deno.env.get('CANVAS_API_TOKEN') ?? '';
+
+export const CANVAS_BASE = RAW_BASE.replace(/\/+$/, '');
+
+export interface CanvasPage {
+  page_id: number;
+  url: string;
+  title: string;
+  body?: string;
+  front_page?: boolean;
+  published?: boolean;
+  updated_at?: string;
+}
+
+export interface CanvasAssignment {
+  id: number;
+  name: string;
+  description?: string;
+  due_at?: string | null;
+  points_possible?: number;
+  assignment_group_id?: number;
+  published?: boolean;
+  html_url?: string;
+}
+
+export interface CanvasAnnouncement {
+  id: number;
+  title: string;
+  message?: string;
+  posted_at?: string;
+  delayed_post_at?: string | null;
+  html_url?: string;
+}
+
+export interface CanvasFile {
+  id: number;
+  display_name: string;
+  filename: string;
+  url?: string;
+  content_type?: string;
+  size?: number;
+  updated_at?: string;
+}
+
+async function fetchWithRetry(url: string, init?: RequestInit, attempt = 0): Promise<Response> {
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      Accept: 'application/json',
+      ...(init?.headers ?? {}),
+    },
+  });
+  if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+    const wait = [1000, 4000, 12000][attempt];
+    await new Promise((r) => setTimeout(r, wait));
+    return fetchWithRetry(url, init, attempt + 1);
+  }
+  return res;
+}
+
+function parseNextLink(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const parts = linkHeader.split(',');
+  for (const p of parts) {
+    const m = p.match(/<([^>]+)>;\s*rel="next"/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+export async function fetchPaginated<T>(path: string): Promise<T[]> {
+  const sep = path.includes('?') ? '&' : '?';
+  let url = `${CANVAS_BASE}/api/v1${path}${sep}per_page=100`;
+  const out: T[] = [];
+  let safety = 0;
+  while (url && safety < 50) {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Canvas GET ${url} -> ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const page = (await res.json()) as T[];
+    out.push(...page);
+    url = parseNextLink(res.headers.get('link')) ?? '';
+    safety++;
+  }
+  return out;
+}
+
+export async function fetchOne<T>(path: string): Promise<T> {
+  const url = `${CANVAS_BASE}/api/v1${path}`;
+  const res = await fetchWithRetry(url);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Canvas GET ${url} -> ${res.status}: ${body.slice(0, 200)}`);
+  }
+  return (await res.json()) as T;
+}
+
+export const listPages = (courseId: number) =>
+  fetchPaginated<CanvasPage>(`/courses/${courseId}/pages`);
+export const getPage = (courseId: number, urlSlug: string) =>
+  fetchOne<CanvasPage>(`/courses/${courseId}/pages/${urlSlug}`);
+export const listAssignments = (courseId: number) =>
+  fetchPaginated<CanvasAssignment>(`/courses/${courseId}/assignments?per_page=100`);
+export const listAnnouncements = (courseId: number) =>
+  fetchPaginated<CanvasAnnouncement>(
+    `/courses/${courseId}/discussion_topics?only_announcements=true`,
+  );
+export const listFiles = (courseId: number) =>
+  fetchPaginated<CanvasFile>(`/courses/${courseId}/files`);
