@@ -267,3 +267,86 @@ export function DaySubjectCard({
     </Card>
   );
 }
+
+/**
+ * Inline editor for structured resources. Each row = one bullet point on Canvas.
+ * Auto-fills URL from content_map when label matches a known lesson_ref (e.g. "SG92").
+ */
+interface ResourceListEditorProps {
+  value: string;
+  contentMap: ContentMapEntry[];
+  subject: string;
+  onChange: (serialized: string) => void;
+}
+
+function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceListEditorProps) {
+  const items: Resource[] = useMemo(() => parseResources(value), [value]);
+
+  const commit = (next: Resource[]) => {
+    onChange(serializeResources(next) ?? '');
+  };
+
+  const update = (idx: number, patch: Partial<Resource>) => {
+    const next = items.map((r, i) => (i === idx ? { ...r, ...patch } : r));
+    // Auto-link from content_map if URL is empty and label looks like a lesson ref
+    if (patch.label !== undefined && !next[idx].url) {
+      const lookup = patch.label.trim().toUpperCase();
+      const subjectFilter = subject === 'Reading' ? ['Reading', 'Spelling'] : [subject];
+      const match = contentMap.find(
+        (e) =>
+          subjectFilter.includes(e.subject) &&
+          e.canvas_url &&
+          e.lesson_ref?.toUpperCase() === lookup,
+      );
+      if (match?.canvas_url) next[idx] = { ...next[idx], url: match.canvas_url };
+    }
+    commit(next);
+  };
+
+  const remove = (idx: number) => commit(items.filter((_, i) => i !== idx));
+  const add = () => commit([...items, { label: '' }]);
+
+  return (
+    <div className="space-y-1">
+      <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Resources
+      </div>
+      {items.map((r, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <Input
+            placeholder="Name"
+            value={r.label}
+            onChange={(e) => update(i, { label: e.target.value })}
+            className="h-6 text-[10px] flex-1 min-w-0"
+          />
+          <Input
+            placeholder="URL (optional)"
+            value={r.url ?? ''}
+            onChange={(e) => update(i, { url: e.target.value })}
+            className="h-6 text-[10px] flex-1 min-w-0"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={() => remove(i)}
+            aria-label="Remove resource"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={add}
+        className="h-6 w-full text-[10px] gap-1"
+      >
+        <Plus className="h-3 w-3" />
+        Add resource
+      </Button>
+    </div>
+  );
+}
