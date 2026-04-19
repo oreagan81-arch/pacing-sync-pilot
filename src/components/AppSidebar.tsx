@@ -43,6 +43,7 @@ const navItems = [
   { title: 'Content Registry', url: '/content-registry', icon: Library },
   { title: 'Health Monitor', url: '/health', icon: Activity },
   { title: 'Memory', url: '/memory', icon: Brain },
+  { title: 'Canvas Brain', url: '/canvas-brain', icon: Brain },
   { title: 'Automation', url: '/automation', icon: Zap },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
