@@ -139,9 +139,28 @@ export default function CanvasBrainPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* 4. Preferred Templates (top patterns per type) */}
+        {/* 3b. Style Confidence */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Gauge className="h-4 w-4" /> Style Confidence
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{confidence.data?.overall ?? 0}%</div>
+            <Progress value={confidence.data?.overall ?? 0} className="h-2 mt-2" />
+            <div className="mt-3 space-y-1">
+              {Object.entries(confidence.data?.byType ?? {}).map(([t, v]) => (
+                <div key={t} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{t.replace(/_/g, ' ')}</span>
+                  <span className="font-mono">{v}%</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
