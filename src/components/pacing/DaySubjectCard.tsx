@@ -11,15 +11,18 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, FileText, Sparkles } from 'lucide-react';
+import { ExternalLink, FileText, Sparkles, Plus, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignment-logic';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import { parseResources, serializeResources, type Resource } from '@/types/thales';
 
 export interface DayCellData {
   type: string;
   lesson_num: string;
   in_class: string;
   at_home: string;
+  /** JSON-serialized Resource[] — use parseResources/serializeResources from @/types/thales. */
   resources: string;
   create_assign: boolean;
 }
