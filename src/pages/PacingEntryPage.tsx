@@ -1,18 +1,16 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, RefreshCw, Zap, Sheet, Loader2 } from 'lucide-react';
+import { Save, Zap, Sheet, Loader2, CalendarDays } from 'lucide-react';
 import PasteImportDialog from '@/components/PasteImportDialog';
+import { DaySubjectCard, type DayCellData } from '@/components/pacing/DaySubjectCard';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { evaluateWeekRisk } from '@/lib/risk-engine';
+import type { ContentMapEntry } from '@/lib/auto-link';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
