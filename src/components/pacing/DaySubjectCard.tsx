@@ -11,11 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, FileText, Sparkles, Plus, X } from 'lucide-react';
+import { ExternalLink, FileText, Sparkles, Plus, X, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignment-logic';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { parseResources, serializeResources, type Resource } from '@/types/thales';
+import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
+import { useState } from 'react';
 
 export interface DayCellData {
   type: string;
