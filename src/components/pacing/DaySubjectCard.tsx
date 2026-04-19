@@ -187,7 +187,7 @@ export function DaySubjectCard({
           </div>
         )}
 
-        {/* Resource badges */}
+        {/* Auto-detected resource badges (from content_map by lesson #) */}
         {resources.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {resources.slice(0, 3).map((r) => (
@@ -210,12 +210,12 @@ export function DaySubjectCard({
           </div>
         )}
 
-        {/* Manual resources field */}
-        <Input
-          placeholder="Resources"
+        {/* Manual structured resources — each row = separate bullet on Canvas */}
+        <ResourceListEditor
           value={cell.resources}
-          onChange={(e) => onChange('resources', e.target.value)}
-          className="h-6 text-[10px]"
+          contentMap={contentMap}
+          subject={subject}
+          onChange={(serialized) => onChange('resources', serialized)}
         />
 
         {/* Assignment toggle */}
