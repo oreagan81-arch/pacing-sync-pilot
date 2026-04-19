@@ -17,7 +17,6 @@ import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignmen
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { parseResources, serializeResources, type Resource } from '@/types/thales';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
-import { useState } from 'react';
 
 export interface DayCellData {
   type: string;
