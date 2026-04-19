@@ -109,6 +109,75 @@ export type Database = {
         }
         Relationships: []
       }
+      canvas_patterns: {
+        Row: {
+          confidence: number
+          created_at: string
+          id: string
+          occurrence_count: number
+          pattern_key: string
+          pattern_type: string
+          pattern_value: Json
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          occurrence_count?: number
+          pattern_key: string
+          pattern_type: string
+          pattern_value?: Json
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          occurrence_count?: number
+          pattern_key?: string
+          pattern_type?: string
+          pattern_value?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      canvas_snapshots: {
+        Row: {
+          body: string | null
+          canvas_id: string
+          content_type: string
+          course_id: number
+          created_at: string
+          id: string
+          metadata: Json
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          canvas_id: string
+          content_type: string
+          course_id: number
+          created_at?: string
+          id?: string
+          metadata?: Json
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          canvas_id?: string
+          content_type?: string
+          course_id?: number
+          created_at?: string
+          id?: string
+          metadata?: Json
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       content_map: {
         Row: {
           auto_linked: boolean

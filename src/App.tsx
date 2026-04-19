@@ -20,6 +20,7 @@ import HealthMonitorPage from '@/pages/HealthMonitorPage';
 import SettingsPage from '@/pages/SettingsPage';
 import MemoryPage from '@/pages/MemoryPage';
 import AutomationPage from '@/pages/AutomationPage';
+import CanvasBrainPage from '@/pages/CanvasBrainPage';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ function AppContent({ config }: { config: AppConfig }) {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/automation" element={<AutomationPage />} />
+          <Route path="/canvas-brain" element={<CanvasBrainPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </DashboardLayout>
