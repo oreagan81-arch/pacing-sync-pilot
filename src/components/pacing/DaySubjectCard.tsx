@@ -4,18 +4,19 @@
  * shows live assignment preview (title + group + points), and surfaces
  * resource badges from content_map for that lesson.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, FileText, Sparkles, Plus, X } from 'lucide-react';
+import { ExternalLink, FileText, Sparkles, Plus, X, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignment-logic';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { parseResources, serializeResources, type Resource } from '@/types/thales';
+import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
 
 export interface DayCellData {
   type: string;
@@ -144,6 +145,12 @@ export function DaySubjectCard({
             className="h-7 text-[11px]"
           />
         </div>
+
+        <BrainHints
+          subject={subject}
+          assignDisabled={assignDisabled}
+          onPickInClass={(v) => onChange('in_class', v)}
+        />
 
         <Textarea
           placeholder="In class"
@@ -347,6 +354,50 @@ function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceLi
         <Plus className="h-3 w-3" />
         Add resource
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Compact "Canvas Brain" hint trigger for a pacing card.
+ * Shows a small chip that, when clicked, expands learned page-section patterns
+ * for this subject. Picking one fills the In-Class field.
+ * Auto-hides if no patterns exist (StyleSuggestions returns null).
+ */
+function BrainHints({
+  subject,
+  assignDisabled,
+  onPickInClass,
+}: {
+  subject: string;
+  assignDisabled: boolean;
+  onPickInClass: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (assignDisabled) return null;
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
+        title="Show learned Canvas patterns for this subject"
+      >
+        <Brain className="h-2.5 w-2.5" />
+        Brain
+      </button>
+      {open && (
+        <StyleSuggestions
+          type="page_section_order"
+          subject={subject}
+          label={`Learned in-class — ${subject}`}
+          onPick={(v) => {
+            onPickInClass(v);
+            setOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
