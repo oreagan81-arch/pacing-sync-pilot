@@ -146,6 +146,12 @@ export function DaySubjectCard({
           />
         </div>
 
+        <BrainHints
+          subject={subject}
+          assignDisabled={assignDisabled}
+          onPickInClass={(v) => onChange('in_class', v)}
+        />
+
         <Textarea
           placeholder="In class"
           value={cell.in_class}
