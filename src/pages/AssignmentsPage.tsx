@@ -32,6 +32,7 @@ import {
 } from '@/lib/assignment-build';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { logDeployHabit } from '@/lib/teacher-memory';
+import { validateDeployment, type ValidationResult } from '@/lib/pre-deploy-validator';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'];
 const FILTER_CHIPS = ['All', 'Math', 'Reading', 'Language Arts', 'Spelling'];
@@ -533,6 +534,14 @@ export default function AssignmentsPage() {
             .filter((r) => selected.has(r.rowKey))
             .map((r) => ({ label: r.title, subject: r.subject }))}
           onApprove={handleDeploy}
+          validation={
+            diffOpen
+              ? validateDeployment({
+                  assignments: previewRows.filter((r) => selected.has(r.rowKey)),
+                  contentMap,
+                })
+              : undefined
+          }
         />
       </div>
     </TooltipProvider>
