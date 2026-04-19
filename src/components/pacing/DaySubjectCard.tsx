@@ -357,3 +357,47 @@ function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceLi
     </div>
   );
 }
+
+/**
+ * Compact "Canvas Brain" hint trigger for a pacing card.
+ * Shows a small chip that, when clicked, expands learned page-section patterns
+ * for this subject. Picking one fills the In-Class field.
+ * Auto-hides if no patterns exist (StyleSuggestions returns null).
+ */
+function BrainHints({
+  subject,
+  assignDisabled,
+  onPickInClass,
+}: {
+  subject: string;
+  assignDisabled: boolean;
+  onPickInClass: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (assignDisabled) return null;
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
+        title="Show learned Canvas patterns for this subject"
+      >
+        <Brain className="h-2.5 w-2.5" />
+        Brain
+      </button>
+      {open && (
+        <StyleSuggestions
+          type="page_section_order"
+          subject={subject}
+          label={`Learned in-class — ${subject}`}
+          onPick={(v) => {
+            onPickInClass(v);
+            setOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
