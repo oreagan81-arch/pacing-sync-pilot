@@ -4,11 +4,20 @@
  * FIX 8: Spelling Test Only Rule
  */
 
+/**
+ * Optional override for auto-derived hints on a row.
+ * - 'evens' / 'odds' force the parity suffix on Math HW titles regardless of lesson number parity.
+ * - 'none' suppresses the parity suffix entirely (title becomes "HW — Lesson N").
+ * - undefined / null falls back to lesson_num parity.
+ */
+export type HintOverride = 'evens' | 'odds' | 'none' | null | undefined;
+
 export function generateAssignmentTitle(
   subject: string,
   type: string,
   lessonNum: string | null,
-  prefix: string
+  prefix: string,
+  hintOverride?: HintOverride,
 ): string {
   const num = lessonNum || '';
 
@@ -21,6 +30,10 @@ export function generateAssignmentTitle(
       // Study Guide ride-along (when Investigation is day-before-Test) is handled by the
       // existing Math Triple Logic in assignment-build.ts, which is keyed off the Test row.
       if (type === 'Investigation') return `${prefix} Investigation ${num}`;
+      // Parity suffix: respect override first, else derive from lesson number.
+      if (hintOverride === 'none') return `${prefix} HW \u2014 Lesson ${num}`;
+      if (hintOverride === 'evens') return `${prefix} Evens HW \u2014 Lesson ${num}`;
+      if (hintOverride === 'odds') return `${prefix} Odds HW \u2014 Lesson ${num}`;
       if (num && parseInt(num) % 2 === 0) return `${prefix} Evens HW \u2014 Lesson ${num}`;
       return `${prefix} Odds HW \u2014 Lesson ${num}`;
 

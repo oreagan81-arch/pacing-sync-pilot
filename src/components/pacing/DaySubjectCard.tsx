@@ -11,9 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, FileText, Sparkles, Plus, X, Brain } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ExternalLink, FileText, Sparkles, Plus, X, Brain, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignment-logic';
+import { generateAssignmentTitle, resolveAssignmentGroup, type HintOverride } from '@/lib/assignment-logic';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { parseResources, serializeResources, type Resource } from '@/types/thales';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
@@ -26,6 +27,8 @@ export interface DayCellData {
   /** JSON-serialized Resource[] — use parseResources/serializeResources from @/types/thales. */
   resources: string;
   create_assign: boolean;
+  /** Optional override for auto-derived parity badge. null/undefined = auto. */
+  hint_override?: HintOverride;
 }
 
 interface Props {
@@ -39,7 +42,7 @@ interface Props {
   availableTypes: string[];
   contentMap: ContentMapEntry[];
   subjectAccent: string; // hsl token e.g. 'hsl(var(--primary))'
-  onChange: (field: keyof DayCellData, value: string | boolean) => void;
+  onChange: (field: keyof DayCellData, value: string | boolean | HintOverride) => void;
 }
 
 const SUBJECT_ACCENTS: Record<string, string> = {
@@ -76,13 +79,13 @@ export function DaySubjectCard({
   const assignDisabled =
     (isFriday && !isTest) || isLaBlocked || isHsBlocked || isInvestigation;
 
-  // Live assignment preview
+  // Live assignment preview — pass hint_override so the title reflects manual parity choice.
   const preview = useMemo(() => {
     if (assignDisabled || !cell.type || isNoClass) return null;
-    const title = generateAssignmentTitle(subject, cell.type, cell.lesson_num, prefix);
+    const title = generateAssignmentTitle(subject, cell.type, cell.lesson_num, prefix, cell.hint_override);
     const group = resolveAssignmentGroup(subject, cell.type);
     return { title, group: group.groupName, points: group.points };
-  }, [subject, cell.type, cell.lesson_num, prefix, assignDisabled, isNoClass]);
+  }, [subject, cell.type, cell.lesson_num, prefix, assignDisabled, isNoClass, cell.hint_override]);
 
   // Resource matches from content_map
   const resources = useMemo(() => {
@@ -294,12 +297,25 @@ export function DaySubjectCard({
           </div>
         )}
 
-        {/* Smart hints */}
+        {/* Smart hints — Even/Odd is editable; click to override or hide */}
         <div className="flex flex-wrap gap-1">
-          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && (
-            <Badge variant="outline" className="text-[8px] h-4 px-1">
-              {isEven ? 'Evens' : 'Odds'}
-            </Badge>
+          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && cell.hint_override !== 'none' && (
+            <ParityHintPopover
+              autoLabel={isEven ? 'Evens' : 'Odds'}
+              override={cell.hint_override}
+              onChange={(v) => onChange('hint_override', v)}
+            />
+          )}
+          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && cell.hint_override === 'none' && (
+            <button
+              type="button"
+              onClick={() => onChange('hint_override', null)}
+              className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1 h-4 text-[8px] text-muted-foreground hover:text-foreground"
+              title="Restore auto Even/Odd badge"
+            >
+              <Plus className="h-2 w-2" />
+              Hint
+            </button>
           )}
           {isInvestigation && (
             <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/30 text-primary">
@@ -334,10 +350,22 @@ interface ResourceListEditorProps {
 }
 
 function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceListEditorProps) {
-  const items: Resource[] = useMemo(() => parseResources(value), [value]);
+  // Local state seeded from the serialized DB value. We keep partial/empty rows here
+  // so a freshly-clicked "+ Add resource" row stays visible until the user types into it.
+  // We re-sync from `value` only when it changes externally (e.g. on week load).
+  const [items, setItems] = useState<Resource[]>(() => parseResources(value));
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    // External change (e.g. Investigation auto-seed, week load) — adopt it.
+    setItems(parseResources(value));
+    setLastValue(value);
+  }
 
   const commit = (next: Resource[]) => {
-    onChange(serializeResources(next) ?? '');
+    setItems(next);
+    const serialized = serializeResources(next) ?? '';
+    setLastValue(serialized);
+    onChange(serialized);
   };
 
   const update = (idx: number, patch: Partial<Resource>) => {
@@ -358,7 +386,12 @@ function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceLi
   };
 
   const remove = (idx: number) => commit(items.filter((_, i) => i !== idx));
-  const add = () => commit([...items, { label: '' }]);
+  const add = () => {
+    // Push an empty row into LOCAL state so it renders immediately. It won't persist
+    // to the DB until the user types something (serializeResources drops fully-empty rows).
+    const next = [...items, { label: '' }];
+    setItems(next);
+  };
 
   return (
     <div className="space-y-1">
@@ -402,6 +435,79 @@ function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceLi
         Add resource
       </Button>
     </div>
+  );
+}
+
+/**
+ * Editable Even/Odd parity badge. Click to override the auto-derived parity
+ * or hide the hint entirely. The selected value flows into generateAssignmentTitle
+ * and changes the deployed assignment title (e.g. "Evens HW" → "HW").
+ */
+function ParityHintPopover({
+  autoLabel,
+  override,
+  onChange,
+}: {
+  autoLabel: 'Evens' | 'Odds';
+  override: HintOverride;
+  onChange: (next: HintOverride) => void;
+}) {
+  const display =
+    override === 'evens' ? 'Evens' : override === 'odds' ? 'Odds' : autoLabel;
+  const isOverridden = override === 'evens' || override === 'odds';
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-0.5 rounded border px-1 h-4 text-[8px] transition-colors ${
+            isOverridden
+              ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/20'
+              : 'border-border bg-transparent text-foreground hover:bg-muted'
+          }`}
+          title="Click to change or hide this hint"
+        >
+          {display}
+          <ChevronDown className="h-2 w-2 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-1" align="start">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent ${
+            !override ? 'font-semibold text-primary' : ''
+          }`}
+        >
+          Auto ({autoLabel})
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('evens')}
+          className={`block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent ${
+            override === 'evens' ? 'font-semibold text-primary' : ''
+          }`}
+        >
+          Evens
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('odds')}
+          className={`block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent ${
+            override === 'odds' ? 'font-semibold text-primary' : ''
+          }`}
+        >
+          Odds
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('none')}
+          className="block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent text-muted-foreground"
+        >
+          None (hide)
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -400,6 +400,7 @@ export type Database = {
           created_at: string | null
           day: string
           deploy_status: string | null
+          hint_override: string | null
           id: string
           in_class: string | null
           is_synthetic: boolean
@@ -422,6 +423,7 @@ export type Database = {
           created_at?: string | null
           day: string
           deploy_status?: string | null
+          hint_override?: string | null
           id?: string
           in_class?: string | null
           is_synthetic?: boolean
@@ -444,6 +446,7 @@ export type Database = {
           created_at?: string | null
           day?: string
           deploy_status?: string | null
+          hint_override?: string | null
           id?: string
           in_class?: string | null
           is_synthetic?: boolean

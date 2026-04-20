@@ -47,6 +47,7 @@ interface DayData {
   at_home: string;
   resources: string;
   create_assign: boolean;
+  hint_override?: 'evens' | 'odds' | 'none' | null;
 }
 
 type WeekData = Record<string, Record<string, DayData>>;
@@ -62,7 +63,7 @@ interface PacingEntryPageProps {
 }
 
 function emptyDay(): DayData {
-  return { type: '', lesson_num: '', in_class: '', at_home: '', resources: '', create_assign: true };
+  return { type: '', lesson_num: '', in_class: '', at_home: '', resources: '', create_assign: true, hint_override: null };
 }
 
 function initWeekData(): WeekData {
@@ -136,7 +137,7 @@ export default function PacingEntryPage({
   }, []);
 
   const updateCell = useCallback(
-    (subject: string, day: string, field: keyof DayData, value: string | boolean) => {
+    (subject: string, day: string, field: keyof DayData, value: string | boolean | null | undefined) => {
       setWeekData((prev) => ({
         ...prev,
         [subject]: {
@@ -189,6 +190,7 @@ export default function PacingEntryPage({
             at_home: isFriday ? null : d.at_home || null,
             resources: d.resources || null,
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
+            hint_override: d.hint_override ?? null,
           };
         })
       );
@@ -243,6 +245,7 @@ export default function PacingEntryPage({
             at_home: row.at_home || '',
             resources: row.resources || '',
             create_assign: row.create_assign ?? true,
+            hint_override: ((row as any).hint_override ?? null) as DayData['hint_override'],
           };
         }
       }
