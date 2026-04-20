@@ -201,12 +201,13 @@ export async function buildAssignmentForCell(
   if (!courseId) return null;
 
   const prefix = config.assignmentPrefixes[subject] || '';
+  const hintOverride = cell.hint_override ?? null;
   const title =
     options?.titleOverride ||
     (await resolveMemory(
       'assignment_name',
-      `${subject}:${type}`,
-      () => generateAssignmentTitle(subject, type, lessonNum, prefix),
+      `${subject}:${type}:${hintOverride ?? 'auto'}`,
+      () => generateAssignmentTitle(subject, type, lessonNum, prefix, hintOverride),
       { lessonNum },
     ));
   const groupInfo = resolveAssignmentGroup(subject, type);
@@ -238,6 +239,7 @@ export async function buildAssignmentForCell(
     {
       isMondayTestStudyGuide,
       readingTestPhrases: config.autoLogic?.readingTestPhrases ?? [],
+      hintOverride,
     },
   );
 
