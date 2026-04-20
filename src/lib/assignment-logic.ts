@@ -106,3 +106,22 @@ export function getDriveDownloadUrl(fileId: string): string {
 export function getDrivePreviewUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }
+
+/**
+ * Returns true when a Math Investigation row sits on the school day immediately before a Math Test
+ * in the same week. Used by the pacing UI to show a "Pre-Test SG will deploy" hint. The actual
+ * Study Guide deployment is owned by Math Triple Logic in assignment-build.ts (keyed off the Test
+ * row), so no extra build-time work is needed here — this helper is informational only.
+ */
+const SCHOOL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+export function isInvestigationBeforeTest(
+  day: string,
+  rows: Array<{ subject: string; day: string; type: string | null }>,
+): boolean {
+  const idx = SCHOOL_DAYS.indexOf(day);
+  if (idx < 0 || idx >= SCHOOL_DAYS.length - 1) return false;
+  const nextDay = SCHOOL_DAYS[idx + 1];
+  return rows.some(
+    (r) => r.subject === 'Math' && r.day === nextDay && (r.type ?? '').toLowerCase() === 'test',
+  );
+}
