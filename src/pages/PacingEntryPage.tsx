@@ -47,6 +47,7 @@ interface DayData {
   at_home: string;
   resources: string;
   create_assign: boolean;
+  hint_override?: 'evens' | 'odds' | 'none' | null;
 }
 
 type WeekData = Record<string, Record<string, DayData>>;
@@ -62,7 +63,7 @@ interface PacingEntryPageProps {
 }
 
 function emptyDay(): DayData {
-  return { type: '', lesson_num: '', in_class: '', at_home: '', resources: '', create_assign: true };
+  return { type: '', lesson_num: '', in_class: '', at_home: '', resources: '', create_assign: true, hint_override: null };
 }
 
 function initWeekData(): WeekData {
