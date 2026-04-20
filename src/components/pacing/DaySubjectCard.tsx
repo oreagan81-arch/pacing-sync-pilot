@@ -11,9 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, FileText, Sparkles, Plus, X, Brain } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ExternalLink, FileText, Sparkles, Plus, X, Brain, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { generateAssignmentTitle, resolveAssignmentGroup } from '@/lib/assignment-logic';
+import { generateAssignmentTitle, resolveAssignmentGroup, type HintOverride } from '@/lib/assignment-logic';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { parseResources, serializeResources, type Resource } from '@/types/thales';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
@@ -26,6 +27,8 @@ export interface DayCellData {
   /** JSON-serialized Resource[] — use parseResources/serializeResources from @/types/thales. */
   resources: string;
   create_assign: boolean;
+  /** Optional override for auto-derived parity badge. null/undefined = auto. */
+  hint_override?: HintOverride;
 }
 
 interface Props {
