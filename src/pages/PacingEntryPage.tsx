@@ -190,6 +190,7 @@ export default function PacingEntryPage({
             at_home: isFriday ? null : d.at_home || null,
             resources: d.resources || null,
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
+            hint_override: d.hint_override ?? null,
           };
         })
       );
@@ -244,6 +245,7 @@ export default function PacingEntryPage({
             at_home: row.at_home || '',
             resources: row.resources || '',
             create_assign: row.create_assign ?? true,
+            hint_override: ((row as any).hint_override ?? null) as DayData['hint_override'],
           };
         }
       }
