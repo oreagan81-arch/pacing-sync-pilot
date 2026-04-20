@@ -4,7 +4,7 @@
  * shows live assignment preview (title + group + points), and surfaces
  * resource badges from content_map for that lesson.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -249,7 +249,9 @@ export function DaySubjectCard({
               htmlFor={`a-${subject}-${day}`}
               className="text-[9px] text-muted-foreground select-none cursor-pointer"
               title={
-                isLaBlocked
+                isInvestigation
+                  ? 'Investigation — no HW assignment. SG auto-deploys via day-after Test.'
+                  : isLaBlocked
                   ? 'LA — only CP and Test create assignments'
                   : isFriday && !isTest
                   ? 'Friday — assignments disabled (Tests OK)'
@@ -257,16 +259,27 @@ export function DaySubjectCard({
               }
             >
               Create assignment
-              {isLaBlocked ? ' (CP/Test only)' : isFriday && !isTest ? ' (locked)' : ''}
+              {isInvestigation
+                ? ' (Investigation — none)'
+                : isLaBlocked
+                ? ' (CP/Test only)'
+                : isFriday && !isTest
+                ? ' (locked)'
+                : ''}
             </label>
           </div>
         )}
 
         {/* Smart hints */}
         <div className="flex flex-wrap gap-1">
-          {subject === 'Math' && isEven !== null && !isTest && (
+          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && (
             <Badge variant="outline" className="text-[8px] h-4 px-1">
               {isEven ? 'Evens' : 'Odds'}
+            </Badge>
+          )}
+          {isInvestigation && (
+            <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/30 text-primary">
+              Investigation — no HW
             </Badge>
           )}
           {subject === 'Math' && isTest && (
