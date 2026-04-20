@@ -68,7 +68,7 @@ function buildDescription(
   inClass: string,
   atHome: string,
   contentMap: ContentMapEntry[],
-  options?: { isMondayTestStudyGuide?: boolean; readingTestPhrases?: string[] },
+  options?: { isMondayTestStudyGuide?: boolean; readingTestPhrases?: string[]; hintOverride?: import('@/store/useSystemStore').HintOverride },
 ): string {
   const lines: string[] = [];
 
@@ -83,8 +83,22 @@ function buildDescription(
         lines.push(`<p><em>Note: distribute Friday prior so students can study over the weekend.</em></p>`);
       }
     } else {
-      const evens = lessonNum && parseInt(lessonNum) % 2 === 0;
-      lines.push(`<p>Complete Lesson <strong>${lessonNum}</strong> ${evens ? 'Evens' : 'Odds'}. Show all work.</p>`);
+      const hint = options?.hintOverride;
+      let parityWord = '';
+      if (hint === 'none') {
+        parityWord = '';
+      } else if (hint === 'evens') {
+        parityWord = 'Evens';
+      } else if (hint === 'odds') {
+        parityWord = 'Odds';
+      } else {
+        parityWord = lessonNum && parseInt(lessonNum) % 2 === 0 ? 'Evens' : 'Odds';
+      }
+      lines.push(
+        parityWord
+          ? `<p>Complete Lesson <strong>${lessonNum}</strong> ${parityWord}. Show all work.</p>`
+          : `<p>Complete Lesson <strong>${lessonNum}</strong>. Show all work.</p>`,
+      );
     }
   } else if (subject === 'Reading') {
     if (type === 'Test') {
