@@ -297,12 +297,25 @@ export function DaySubjectCard({
           </div>
         )}
 
-        {/* Smart hints */}
+        {/* Smart hints — Even/Odd is editable; click to override or hide */}
         <div className="flex flex-wrap gap-1">
-          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && (
-            <Badge variant="outline" className="text-[8px] h-4 px-1">
-              {isEven ? 'Evens' : 'Odds'}
-            </Badge>
+          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && cell.hint_override !== 'none' && (
+            <ParityHintPopover
+              autoLabel={isEven ? 'Evens' : 'Odds'}
+              override={cell.hint_override}
+              onChange={(v) => onChange('hint_override', v)}
+            />
+          )}
+          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && cell.hint_override === 'none' && (
+            <button
+              type="button"
+              onClick={() => onChange('hint_override', null)}
+              className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/30 px-1 h-4 text-[8px] text-muted-foreground hover:text-foreground"
+              title="Restore auto Even/Odd badge"
+            >
+              <Plus className="h-2 w-2" />
+              Hint
+            </button>
           )}
           {isInvestigation && (
             <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/30 text-primary">
