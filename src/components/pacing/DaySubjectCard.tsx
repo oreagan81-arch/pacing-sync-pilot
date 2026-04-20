@@ -105,6 +105,30 @@ export function DaySubjectCard({
     );
   }, [contentMap, cell.lesson_num, subject]);
 
+  // Seed default resources when an Investigation row gets a lesson number and resources are empty.
+  // Three bullets: Investigation Student Book, Study Guide (Blank), Study Guide (Completed).
+  // URLs auto-fill from content_map when matching lesson_refs exist (INV{n}, SG{n}-blank, SG{n}-completed, SG{n}).
+  useEffect(() => {
+    if (!isInvestigation || !cell.lesson_num) return;
+    const existing = parseResources(cell.resources);
+    if (existing.length > 0) return;
+    const n = cell.lesson_num;
+    const findUrl = (refs: string[]): string | undefined => {
+      const lower = refs.map((r) => r.toLowerCase());
+      const hit = contentMap.find(
+        (e) => e.subject === 'Math' && e.canvas_url && lower.includes(e.lesson_ref?.toLowerCase() ?? ''),
+      );
+      return hit?.canvas_url ?? undefined;
+    };
+    const seeded: Resource[] = [
+      { label: `Investigation ${n} Student Book`, url: findUrl([`INV${n}`, `Investigation ${n}`]) },
+      { label: `Study Guide ${n} (Blank)`, url: findUrl([`SG${n}-blank`, `SG${n}`]) },
+      { label: `Study Guide ${n} (Completed)`, url: findUrl([`SG${n}-completed`, `SG${n}`]) },
+    ];
+    onChange('resources', serializeResources(seeded) ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInvestigation, cell.lesson_num]);
+
   return (
     <Card
       className="relative overflow-hidden border-border bg-card/50 transition-all hover:bg-card hover:shadow-md"
