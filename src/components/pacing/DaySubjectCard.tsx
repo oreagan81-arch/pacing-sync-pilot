@@ -68,10 +68,13 @@ export function DaySubjectCard({
   const isTest = cell.type?.toLowerCase().includes('test') ?? false;
   const isReview = cell.in_class?.toLowerCase().includes('review') ?? false;
   const isNoClass = cell.type === '-' || cell.type === 'No Class';
+  const isInvestigation = subject === 'Math' && cell.type === 'Investigation';
   const isEven = cell.lesson_num ? parseInt(cell.lesson_num) % 2 === 0 : null;
 
   const hideAssign = isHsBlocked;
-  const assignDisabled = (isFriday && !isTest) || isLaBlocked || isHsBlocked;
+  // Investigations never create their own HW assignment (SG ride-along is owned by the Test row).
+  const assignDisabled =
+    (isFriday && !isTest) || isLaBlocked || isHsBlocked || isInvestigation;
 
   // Live assignment preview
   const preview = useMemo(() => {
@@ -86,7 +89,14 @@ export function DaySubjectCard({
     if (!cell.lesson_num) return [];
     const subjectFilter = subject === 'Reading' ? ['Reading', 'Spelling'] : [subject];
     const num = cell.lesson_num;
-    const refs = [`L${num}`, `Lesson ${num}`, `SG${num}`, `Test ${num}`];
+    const refs = [
+      `L${num}`,
+      `Lesson ${num}`,
+      `SG${num}`,
+      `Test ${num}`,
+      `INV${num}`,
+      `Investigation ${num}`,
+    ];
     return contentMap.filter(
       (e) =>
         subjectFilter.includes(e.subject) &&
