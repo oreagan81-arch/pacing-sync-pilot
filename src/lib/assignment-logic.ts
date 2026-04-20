@@ -17,6 +17,10 @@ export function generateAssignmentTitle(
       if (type === 'Test') return `${prefix} Test \u2014 Lesson ${num}`;
       if (type === 'Fact Test') return `${prefix} Fact Test ${num}`;
       if (type === 'Study Guide') return `${prefix} Study Guide \u2014 Lesson ${num}`;
+      // Investigations: no homework assignment is generated. Title returned for display only.
+      // Study Guide ride-along (when Investigation is day-before-Test) is handled by the
+      // existing Math Triple Logic in assignment-build.ts, which is keyed off the Test row.
+      if (type === 'Investigation') return `${prefix} Investigation ${num}`;
       if (num && parseInt(num) % 2 === 0) return `${prefix} Evens HW \u2014 Lesson ${num}`;
       return `${prefix} Odds HW \u2014 Lesson ${num}`;
 

@@ -27,7 +27,7 @@ const API_SUBJECT_MAP: Record<string, string> = {
 };
 
 const SUBJECT_TYPES: Record<string, string[]> = {
-  Math: ['Lesson', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
+  Math: ['Lesson', 'Investigation', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
   Reading: ['Lesson', 'Test', 'Checkout', 'No Class', '-'],
   Spelling: ['Lesson', 'Test', 'No Class', '-'],
   'Language Arts': ['Lesson', 'CP', 'Test', 'No Class', '-'],
