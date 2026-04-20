@@ -4,7 +4,7 @@
  * shows live assignment preview (title + group + points), and surfaces
  * resource badges from content_map for that lesson.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -68,10 +68,13 @@ export function DaySubjectCard({
   const isTest = cell.type?.toLowerCase().includes('test') ?? false;
   const isReview = cell.in_class?.toLowerCase().includes('review') ?? false;
   const isNoClass = cell.type === '-' || cell.type === 'No Class';
+  const isInvestigation = subject === 'Math' && cell.type === 'Investigation';
   const isEven = cell.lesson_num ? parseInt(cell.lesson_num) % 2 === 0 : null;
 
   const hideAssign = isHsBlocked;
-  const assignDisabled = (isFriday && !isTest) || isLaBlocked || isHsBlocked;
+  // Investigations never create their own HW assignment (SG ride-along is owned by the Test row).
+  const assignDisabled =
+    (isFriday && !isTest) || isLaBlocked || isHsBlocked || isInvestigation;
 
   // Live assignment preview
   const preview = useMemo(() => {
@@ -86,7 +89,14 @@ export function DaySubjectCard({
     if (!cell.lesson_num) return [];
     const subjectFilter = subject === 'Reading' ? ['Reading', 'Spelling'] : [subject];
     const num = cell.lesson_num;
-    const refs = [`L${num}`, `Lesson ${num}`, `SG${num}`, `Test ${num}`];
+    const refs = [
+      `L${num}`,
+      `Lesson ${num}`,
+      `SG${num}`,
+      `Test ${num}`,
+      `INV${num}`,
+      `Investigation ${num}`,
+    ];
     return contentMap.filter(
       (e) =>
         subjectFilter.includes(e.subject) &&
@@ -94,6 +104,30 @@ export function DaySubjectCard({
         refs.some((r) => e.lesson_ref?.toLowerCase() === r.toLowerCase()),
     );
   }, [contentMap, cell.lesson_num, subject]);
+
+  // Seed default resources when an Investigation row gets a lesson number and resources are empty.
+  // Three bullets: Investigation Student Book, Study Guide (Blank), Study Guide (Completed).
+  // URLs auto-fill from content_map when matching lesson_refs exist (INV{n}, SG{n}-blank, SG{n}-completed, SG{n}).
+  useEffect(() => {
+    if (!isInvestigation || !cell.lesson_num) return;
+    const existing = parseResources(cell.resources);
+    if (existing.length > 0) return;
+    const n = cell.lesson_num;
+    const findUrl = (refs: string[]): string | undefined => {
+      const lower = refs.map((r) => r.toLowerCase());
+      const hit = contentMap.find(
+        (e) => e.subject === 'Math' && e.canvas_url && lower.includes(e.lesson_ref?.toLowerCase() ?? ''),
+      );
+      return hit?.canvas_url ?? undefined;
+    };
+    const seeded: Resource[] = [
+      { label: `Investigation ${n} Student Book`, url: findUrl([`INV${n}`, `Investigation ${n}`]) },
+      { label: `Study Guide ${n} (Blank)`, url: findUrl([`SG${n}-blank`, `SG${n}`]) },
+      { label: `Study Guide ${n} (Completed)`, url: findUrl([`SG${n}-completed`, `SG${n}`]) },
+    ];
+    onChange('resources', serializeResources(seeded) ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInvestigation, cell.lesson_num]);
 
   return (
     <Card
@@ -239,7 +273,9 @@ export function DaySubjectCard({
               htmlFor={`a-${subject}-${day}`}
               className="text-[9px] text-muted-foreground select-none cursor-pointer"
               title={
-                isLaBlocked
+                isInvestigation
+                  ? 'Investigation — no HW assignment. SG auto-deploys via day-after Test.'
+                  : isLaBlocked
                   ? 'LA — only CP and Test create assignments'
                   : isFriday && !isTest
                   ? 'Friday — assignments disabled (Tests OK)'
@@ -247,16 +283,27 @@ export function DaySubjectCard({
               }
             >
               Create assignment
-              {isLaBlocked ? ' (CP/Test only)' : isFriday && !isTest ? ' (locked)' : ''}
+              {isInvestigation
+                ? ' (Investigation — none)'
+                : isLaBlocked
+                ? ' (CP/Test only)'
+                : isFriday && !isTest
+                ? ' (locked)'
+                : ''}
             </label>
           </div>
         )}
 
         {/* Smart hints */}
         <div className="flex flex-wrap gap-1">
-          {subject === 'Math' && isEven !== null && !isTest && (
+          {subject === 'Math' && isEven !== null && !isTest && !isInvestigation && (
             <Badge variant="outline" className="text-[8px] h-4 px-1">
               {isEven ? 'Evens' : 'Odds'}
+            </Badge>
+          )}
+          {isInvestigation && (
+            <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/30 text-primary">
+              Investigation — no HW
             </Badge>
           )}
           {subject === 'Math' && isTest && (
