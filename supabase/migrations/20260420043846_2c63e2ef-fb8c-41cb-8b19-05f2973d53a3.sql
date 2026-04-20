@@ -1,0 +1,2 @@
+ALTER TABLE public.pacing_rows ADD COLUMN IF NOT EXISTS hint_override text;
+COMMENT ON COLUMN public.pacing_rows.hint_override IS 'User override for auto-derived hint badges (e.g. Math even/odd parity). Values: ''evens'' | ''odds'' | ''none'' | NULL (auto).';
