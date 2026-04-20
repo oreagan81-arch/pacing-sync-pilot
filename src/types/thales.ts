@@ -53,11 +53,18 @@ export function parseResources(raw: string | null | undefined): Resource[] {
 
 /**
  * Serialize Resource[] for DB storage. Empty list → null (clears the column).
+ * Preserves rows that have EITHER a label OR a url so in-progress edits
+ * (e.g. a freshly-added empty row in the editor) survive a round-trip.
  */
 export function serializeResources(list: Resource[]): string | null {
-  const cleaned = list.filter((r) => r.label.trim());
+  const cleaned = list.filter((r) => (r.label ?? '').trim() || (r.url ?? '').trim());
   if (cleaned.length === 0) return null;
-  return JSON.stringify(cleaned.map((r) => ({ label: r.label.trim(), ...(r.url?.trim() ? { url: r.url.trim() } : {}) })));
+  return JSON.stringify(
+    cleaned.map((r) => ({
+      label: (r.label ?? '').trim(),
+      ...((r.url ?? '').trim() ? { url: (r.url ?? '').trim() } : {}),
+    })),
+  );
 }
 
 export type AssignmentType =
