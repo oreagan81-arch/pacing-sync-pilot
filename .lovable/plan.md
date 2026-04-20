@@ -1,49 +1,46 @@
 
-## Phase 2.2 — Math "Investigation" lesson type
+## Phase 2.3 — Editable hint badges + button audit
 
-### Current state
-- Math `availableTypes` (in `PacingEntryPage.tsx`) likely: `Lesson`, `Test`, `Fact Test`, `Study Guide`, `Review`, `-/No Class`.
-- Even/odd HW logic in `assignment-logic.ts`: any non-Test/non-Fact-Test/non-Study-Guide Math row → `Evens HW` or `Odds HW` based on `lessonNum % 2`.
-- Resource auto-fill: matches `L{n}`, `Lesson {n}`, `SG{n}`, `Test {n}`.
+### Issue 1: Even/Odd badge not editable
+Currently in `DaySubjectCard.tsx`, the Even/Odd badge auto-derives from `cell.lesson_num % 2` and is read-only. Same for "Triple (Test+Fact+SG)" and "Investigation — no HW" hints. User wants to override or clear these.
 
-### What changes
+**Fix**: Add a new optional cell field `hint_override: 'evens' | 'odds' | 'none' | null` (null = auto). Render the badge as a small dropdown/popover trigger:
+- Click badge → popover with: `Auto (Evens)`, `Evens`, `Odds`, `None (hide)`.
+- When `hint_override='none'`, badge hidden and assignment title generator skips the parity suffix.
+- Wire into `assignment-logic.ts` `generateAssignmentTitle` so override drives the title.
 
-**1. Add "Investigation" to Math type dropdown**
-- File: `src/pages/PacingEntryPage.tsx` (Math `availableTypes` array). Insert `'Investigation'`.
+Storage: `pacing_rows` already has a flexible JSON area or we add a `hint_override` text column. Will use the existing `notes` field if available, else add column via migration.
 
-**2. Suppress assignment creation for Investigations**
-- File: `src/components/pacing/DaySubjectCard.tsx` — extend `assignDisabled` to include `subject === 'Math' && type === 'Investigation'`. Hide even/odd badge and "Will deploy" preview for Investigations.
-- File: `src/lib/assignment-logic.ts` — add early return in `generateAssignmentTitle` / skip in deploy path so Investigations never produce an HW assignment. Also drop the Even/Odd hint badge in the card.
-
-**3. Auto-attach default resources**
-On type change to `Investigation` with a lesson_num, auto-populate `cell.resources` (only if currently empty) with three rows:
+### Issue 2: "+ Add resource" button dead
+Looking at `ResourceListEditor` in `DaySubjectCard.tsx`:
+```tsx
+<Button type="button" variant="outline" size="sm" onClick={add} ...>
 ```
-[Investigation {n} Student Book] [url? from content_map: lesson_ref="INV{n}" or "Investigation {n}"]
-[Study Guide {n} (Blank)]        [url? from content_map: lesson_ref="SG{n}-blank" fallback "SG{n}"]
-[Study Guide {n} (Completed)]    [url? from content_map: lesson_ref="SG{n}-completed" fallback "SG{n}"]
-```
-Implementation: in `DaySubjectCard.tsx` `onChange` handler, when `field === 'type'` becomes `Investigation` (or `lesson_num` changes while type is Investigation) and resources is empty, seed defaults via `serializeResources`. Use `contentMap` lookup to fill URLs where possible.
+The button itself looks correct. Likely culprit: the `Card` ancestor or a parent `<form>` is intercepting the click, OR `commit()` writes a serialized empty array `[]` which `parseResources` then drops back to `[]` and React doesn't re-render because the serialized string is unchanged.
 
-**4. Study Guide assignment IF Investigation = day before Test**
-- New helper in `src/lib/assignment-logic.ts`: `isInvestigationBeforeTest(week, day, subject, rows)` — scans the same week's Math rows; returns true when the next school day is a Math `Test`.
-- In the card, when conditions met, show a small "Pre-Test SG will deploy" hint and allow `create_assign` (defaulted ON for Study Guide only, not for the Investigation row itself).
-- Actual deployment: the existing Math Triple Logic already creates a Study Guide for every Test (due day-1, omit_from_final). Verify in `assignment-build.ts` / friday-deploy that this still fires when the day-1 row is now an Investigation rather than a regular Lesson — no code change should be needed since the Triple is keyed off the Test row, not the day-before row. Add a comment confirming this.
+**Likely root cause**: `serializeResources([{ label: '' }])` may be returning `null`/empty when label is blank, so `onChange` fires with `''` and nothing renders. Need to verify `serializeResources` in `src/types/thales.ts` doesn't filter empty rows.
 
-**5. Resource auto-link patterns**
-Extend the lesson-ref match list in `DaySubjectCard.tsx` (resources useMemo) to include `INV{n}` and `Investigation {n}` so any `content_map` rows with those refs surface as badges.
+**Fix**:
+1. Read `src/types/thales.ts` to confirm `serializeResources` behavior.
+2. Either (a) change `serializeResources` to keep empty-label rows during editing, or (b) seed new rows with placeholder label `'New resource'` so they survive serialization.
+3. Add a `console.log` during dev only? No — just fix and verify in preview.
+
+### Issue 3: Button audit across pages
+User asked to "check all buttons on all pages to make sure they work". Scope:
+- `PacingEntryPage` — Save, Smart Paste, Add resource, Brain chip, type select.
+- `AnnouncementCenterPage`, `AssignmentsPage`, `CanvasBrainPage`, `FileOrganizerPage`, `NewsletterPage`, `ContentRegistryPage`, `HealthMonitorPage`, `MemoryPage`, `AutomationPage`, `PageBuilderPage`, `PacingViewerPage`, `SettingsPage`, `DashboardPage`.
+
+Approach: grep for `<Button` with no `onClick` and no `type="submit"` / no `asChild` wrapping a `Link`. Flag dead ones. Fix obvious cases; list rest for follow-up so we don't blow out scope.
 
 ### Files to modify
-1. `src/pages/PacingEntryPage.tsx` — add `'Investigation'` to Math types.
-2. `src/components/pacing/DaySubjectCard.tsx` — disable assignment for Investigation, seed default resources on type select, extend resource matching, drop even/odd badge for Investigation.
-3. `src/lib/assignment-logic.ts` — short-circuit Investigation in title/group resolvers; add `isInvestigationBeforeTest` helper (used for UI hint only).
-4. `.lovable/memory/business-rules/subject-logic.md` — document Investigation rule (no HW, default 3 resources, SG ride-along on day-before-Test via existing Triple).
-
-### Out of scope
-- Changing `assignment-build.ts` Triple Logic — already handles SG via the Test row, so day-before-Investigation is automatically covered.
-- Adding new `content_map` entries for INV student books — user can add manually; auto-link will pick them up once present.
+1. `src/types/thales.ts` — fix `serializeResources` to preserve empty-label rows during editing.
+2. `src/components/pacing/DaySubjectCard.tsx` — replace Even/Odd badge with editable popover; same for Triple/Investigation hints (toggleable show/hide).
+3. `src/lib/assignment-logic.ts` — accept `hintOverride` param in `generateAssignmentTitle` to drive parity.
+4. `src/pages/PacingEntryPage.tsx` — pass `hint_override` through cell data + persist on save.
+5. `supabase/migrations/` — add `hint_override text` column to `pacing_rows` (nullable).
+6. **Audit pass**: open every page file under `src/pages/` and grep for dead buttons; fix or report.
 
 ### Verify
-- Open /pacing → Math row → type dropdown shows "Investigation".
-- Pick `Investigation`, lesson `10` → 3 resource rows auto-fill, "Will deploy" panel disappears, Even/Odd badge hidden, Create Assignment hidden/disabled.
-- Set Tuesday Math = Investigation 10, Wednesday Math = Test 10 → deploy still produces SM5 Test/Fact Test/Study Guide for Wednesday (Triple intact); no Tuesday HW.
-- `content_map` entry with `lesson_ref="INV10"` shows as auto-detected badge on the Investigation card.
+- Click "+ Add resource" on a Math card → new empty row appears, can type label, persists on save.
+- Click Evens badge on Math Lesson 13 → popover; pick "None" → badge hides, deployed title becomes `SM5: HW — Lesson 13` (no Evens/Odds).
+- Audit report listed in chat with status per page; dead buttons fixed in same patch where trivial.
