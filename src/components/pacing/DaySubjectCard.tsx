@@ -42,7 +42,7 @@ interface Props {
   availableTypes: string[];
   contentMap: ContentMapEntry[];
   subjectAccent: string; // hsl token e.g. 'hsl(var(--primary))'
-  onChange: (field: keyof DayCellData, value: string | boolean) => void;
+  onChange: (field: keyof DayCellData, value: string | boolean | HintOverride) => void;
 }
 
 const SUBJECT_ACCENTS: Record<string, string> = {
@@ -79,13 +79,13 @@ export function DaySubjectCard({
   const assignDisabled =
     (isFriday && !isTest) || isLaBlocked || isHsBlocked || isInvestigation;
 
-  // Live assignment preview
+  // Live assignment preview — pass hint_override so the title reflects manual parity choice.
   const preview = useMemo(() => {
     if (assignDisabled || !cell.type || isNoClass) return null;
-    const title = generateAssignmentTitle(subject, cell.type, cell.lesson_num, prefix);
+    const title = generateAssignmentTitle(subject, cell.type, cell.lesson_num, prefix, cell.hint_override);
     const group = resolveAssignmentGroup(subject, cell.type);
     return { title, group: group.groupName, points: group.points };
-  }, [subject, cell.type, cell.lesson_num, prefix, assignDisabled, isNoClass]);
+  }, [subject, cell.type, cell.lesson_num, prefix, assignDisabled, isNoClass, cell.hint_override]);
 
   // Resource matches from content_map
   const resources = useMemo(() => {
