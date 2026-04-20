@@ -137,7 +137,7 @@ export default function PacingEntryPage({
   }, []);
 
   const updateCell = useCallback(
-    (subject: string, day: string, field: keyof DayData, value: string | boolean) => {
+    (subject: string, day: string, field: keyof DayData, value: string | boolean | null | undefined) => {
       setWeekData((prev) => ({
         ...prev,
         [subject]: {
