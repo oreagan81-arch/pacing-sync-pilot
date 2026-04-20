@@ -350,10 +350,22 @@ interface ResourceListEditorProps {
 }
 
 function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceListEditorProps) {
-  const items: Resource[] = useMemo(() => parseResources(value), [value]);
+  // Local state seeded from the serialized DB value. We keep partial/empty rows here
+  // so a freshly-clicked "+ Add resource" row stays visible until the user types into it.
+  // We re-sync from `value` only when it changes externally (e.g. on week load).
+  const [items, setItems] = useState<Resource[]>(() => parseResources(value));
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    // External change (e.g. Investigation auto-seed, week load) — adopt it.
+    setItems(parseResources(value));
+    setLastValue(value);
+  }
 
   const commit = (next: Resource[]) => {
-    onChange(serializeResources(next) ?? '');
+    setItems(next);
+    const serialized = serializeResources(next) ?? '';
+    setLastValue(serialized);
+    onChange(serialized);
   };
 
   const update = (idx: number, patch: Partial<Resource>) => {
@@ -374,7 +386,12 @@ function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceLi
   };
 
   const remove = (idx: number) => commit(items.filter((_, i) => i !== idx));
-  const add = () => commit([...items, { label: '' }]);
+  const add = () => {
+    // Push an empty row into LOCAL state so it renders immediately. It won't persist
+    // to the DB until the user types something (serializeResources drops fully-empty rows).
+    const next = [...items, { label: '' }];
+    setItems(next);
+  };
 
   return (
     <div className="space-y-1">
@@ -418,6 +435,79 @@ function ResourceListEditor({ value, contentMap, subject, onChange }: ResourceLi
         Add resource
       </Button>
     </div>
+  );
+}
+
+/**
+ * Editable Even/Odd parity badge. Click to override the auto-derived parity
+ * or hide the hint entirely. The selected value flows into generateAssignmentTitle
+ * and changes the deployed assignment title (e.g. "Evens HW" → "HW").
+ */
+function ParityHintPopover({
+  autoLabel,
+  override,
+  onChange,
+}: {
+  autoLabel: 'Evens' | 'Odds';
+  override: HintOverride;
+  onChange: (next: HintOverride) => void;
+}) {
+  const display =
+    override === 'evens' ? 'Evens' : override === 'odds' ? 'Odds' : autoLabel;
+  const isOverridden = override === 'evens' || override === 'odds';
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-0.5 rounded border px-1 h-4 text-[8px] transition-colors ${
+            isOverridden
+              ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/20'
+              : 'border-border bg-transparent text-foreground hover:bg-muted'
+          }`}
+          title="Click to change or hide this hint"
+        >
+          {display}
+          <ChevronDown className="h-2 w-2 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-1" align="start">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent ${
+            !override ? 'font-semibold text-primary' : ''
+          }`}
+        >
+          Auto ({autoLabel})
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('evens')}
+          className={`block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent ${
+            override === 'evens' ? 'font-semibold text-primary' : ''
+          }`}
+        >
+          Evens
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('odds')}
+          className={`block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent ${
+            override === 'odds' ? 'font-semibold text-primary' : ''
+          }`}
+        >
+          Odds
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('none')}
+          className="block w-full text-left px-2 py-1 text-xs rounded hover:bg-accent text-muted-foreground"
+        >
+          None (hide)
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
 
