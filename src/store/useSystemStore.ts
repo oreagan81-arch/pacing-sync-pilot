@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 
+export type HintOverride = 'evens' | 'odds' | 'none' | null;
+
 export interface PacingCell {
   value: string;
   lessonNum: string;
   isTest: boolean;
   isReview: boolean;
   isNoClass: boolean;
+  hint_override?: HintOverride;
 }
 
 export interface PacingData {
