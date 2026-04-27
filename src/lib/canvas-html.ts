@@ -159,9 +159,13 @@ export function generateCanvasPageHtml(params: CanvasPageParams): string {
   const parts: string[] = [];
 
   // 1. BANNER
+  // Brand lock: weekly-agenda banner + day headers are ALWAYS Thales Blue.
+  // `quarterColor` is preserved on the params for sub-blocks / redirect pages
+  // (History & Science) that legitimately need the quarter accent.
+  const MAIN_HEADER_BLUE = '#0065a7';
   parts.push(`<div id="kl_wrapper_3" class="kl_circle_left kl_wrapper" style="border-style: none;">
     <div id="kl_banner" class="">
-        <h2 class="" style="${BANNER_BG_STYLE(quarterColor)}"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${quarterColor};">${subject} \u2014 Weekly Agenda</span></h2>
+        <h2 class="" style="${BANNER_BG_STYLE(MAIN_HEADER_BLUE)}"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${MAIN_HEADER_BLUE};">${subject} \u2014 Weekly Agenda</span></h2>
         <p class="kl_subtitle">${quarter}, Week ${weekNum} | ${dateRange}</p>
         <p class="kl_subtitle" style="color: #888888; font-size: 0.85em; margin-top: -4px;"><em>Last updated: ${formatLastUpdated()}</em></p>
     </div>`);
