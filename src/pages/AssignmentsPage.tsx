@@ -211,8 +211,8 @@ export default function AssignmentsPage() {
   }, [previewRows, filter]);
 
   const deployable = useMemo(
-    () => filtered.filter((r) => r.status === 'NEW' || r.status === 'UPDATE'),
-    [filtered],
+    () => filtered.filter((r) => r.status === 'NEW' || r.status === 'UPDATE' || forcedRows.has(r.rowKey)),
+    [filtered, forcedRows],
   );
 
   const toggleSelect = (key: string) => {
