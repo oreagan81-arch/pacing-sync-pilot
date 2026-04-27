@@ -270,10 +270,16 @@ ${items}
       dayHtml += `\n${extraInClass}`;
     }
 
-    // AT HOME — only if there's homework and it's not Friday
+    // AT HOME — only if there's homework and it's not Friday.
+    // If the row has a deployed assignment URL, wrap the homework text as a
+    // clickable link (e.g. "Lesson 102 evens" → opens the Canvas assignment).
+    // Otherwise render as plain text.
     if (hasAtHome) {
       let atHomeText = row.at_home!.trim();
       atHomeText = injectFileLinks(atHomeText, contentMap, row.subject);
+      if (row.canvas_url) {
+        atHomeText = injectAssignmentLink(atHomeText, row.canvas_url);
+      }
       dayHtml += `
         <p>&nbsp;</p>
         <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>
