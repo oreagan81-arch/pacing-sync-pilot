@@ -264,6 +264,7 @@ export default function AssignmentsPage() {
             day: r.day,
             type: r.type,
             isSynthetic: r.isSynthetic,
+            force: forcedRows.has(r.rowKey) || undefined,
           },
         );
         if (res.status === 'DEPLOYED') {
