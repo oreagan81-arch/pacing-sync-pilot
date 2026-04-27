@@ -76,6 +76,16 @@ export default function AssignmentsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<string>('All');
   const [deployResults, setDeployResults] = useState<Record<string, DeployStatus>>({});
+  const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
+
+  const toggleForce = (key: string) => {
+    setForcedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   useRealtimeDeploy();
 
