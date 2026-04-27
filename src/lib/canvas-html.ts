@@ -7,6 +7,15 @@
 import { applyBrevity } from './assignment-logic';
 import { injectFileLinks, injectAssignmentLink, type ContentMapEntry } from './auto-link';
 import { COURSE_IDS } from './course-ids';
+import { parseResources } from '@/types/thales';
+
+/**
+ * THALES OS Brand Palette (verified):
+ *   Blue  = #0065a7  (Q1 / Reading family)
+ *   Pink  = #c51062  (Reminders accent)
+ *   Teal  = #00c0a5  (Resources accent)
+ * Pink + Teal are hard-coded below; Blue is supplied via `quarterColor`.
+ */
 
 export interface RedirectPageParams {
   thisSubject: 'History' | 'Science';
