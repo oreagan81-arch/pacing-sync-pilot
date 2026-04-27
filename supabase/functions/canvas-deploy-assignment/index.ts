@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
       assignmentGroup, dueDate, existingId, rowId, weekId,
       omitFromFinal, contentHash,
       day, type, isSynthetic,
+      force,
     } = await req.json();
 
     if (!courseId || !title) {
