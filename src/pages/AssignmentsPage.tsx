@@ -76,6 +76,16 @@ export default function AssignmentsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<string>('All');
   const [deployResults, setDeployResults] = useState<Record<string, DeployStatus>>({});
+  const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
+
+  const toggleForce = (key: string) => {
+    setForcedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   useRealtimeDeploy();
 
@@ -201,8 +211,8 @@ export default function AssignmentsPage() {
   }, [previewRows, filter]);
 
   const deployable = useMemo(
-    () => filtered.filter((r) => r.status === 'NEW' || r.status === 'UPDATE'),
-    [filtered],
+    () => filtered.filter((r) => r.status === 'NEW' || r.status === 'UPDATE' || forcedRows.has(r.rowKey)),
+    [filtered, forcedRows],
   );
 
   const toggleSelect = (key: string) => {
@@ -254,6 +264,7 @@ export default function AssignmentsPage() {
             day: r.day,
             type: r.type,
             isSynthetic: r.isSynthetic,
+            force: forcedRows.has(r.rowKey) || undefined,
           },
         );
         if (res.status === 'DEPLOYED') {
@@ -419,7 +430,8 @@ export default function AssignmentsPage() {
                     {filtered.map((row) => {
                       const liveStatus = deployResults[row.rowKey] || row.status;
                       const isSkip = row.status === 'SKIP';
-                      const canSelect = row.status === 'NEW' || row.status === 'UPDATE';
+                      const isForced = forcedRows.has(row.rowKey);
+                      const canSelect = row.status === 'NEW' || row.status === 'UPDATE' || isForced;
                       const isExpanded = expanded.has(row.rowKey);
                       return (
                         <>
@@ -449,15 +461,39 @@ export default function AssignmentsPage() {
                             </TableCell>
                             <TableCell>
                               {isSkip && row.skipReason ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center gap-1">
-                                      {statusBadge(liveStatus)}
-                                      <SkipForward className="h-3 w-3 text-muted-foreground" />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{row.skipReason}</TooltipContent>
-                                </Tooltip>
+                                <div className="flex items-center gap-1.5">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1">
+                                        {statusBadge(liveStatus)}
+                                        <SkipForward className="h-3 w-3 text-muted-foreground" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{row.skipReason}</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant={isForced ? 'default' : 'outline'}
+                                        className="h-5 px-1.5 text-[9px] gap-1"
+                                        onClick={() => {
+                                          toggleForce(row.rowKey);
+                                          if (!isForced) {
+                                            setSelected((prev) => {
+                                              const next = new Set(prev);
+                                              next.add(row.rowKey);
+                                              return next;
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        {isForced ? 'FORCED' : 'FORCE'}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Bypass gatekeeper and deploy this assignment to Canvas anyway.</TooltipContent>
+                                  </Tooltip>
+                                </div>
                               ) : statusBadge(liveStatus)}
                             </TableCell>
                             <TableCell className="text-xs font-medium text-primary">{row.day}</TableCell>

@@ -114,3 +114,17 @@ export const listAnnouncements = (courseId: number) =>
   );
 export const listFiles = (courseId: number) =>
   fetchPaginated<CanvasFile>(`/courses/${courseId}/files`);
+
+export interface CanvasFolder {
+  id: number;
+  name: string;
+  full_name: string;
+  files_count?: number;
+  parent_folder_id?: number | null;
+}
+
+export const listFolders = (courseId: number) =>
+  fetchPaginated<CanvasFolder>(`/courses/${courseId}/folders`);
+
+export const listFolderFiles = (folderId: number) =>
+  fetchPaginated<CanvasFile>(`/folders/${folderId}/files`);

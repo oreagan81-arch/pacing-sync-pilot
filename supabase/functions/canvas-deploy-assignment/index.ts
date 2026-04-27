@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
       assignmentGroup, dueDate, existingId, rowId, weekId,
       omitFromFinal, contentHash,
       day, type, isSynthetic,
+      force,
     } = await req.json();
 
     if (!courseId || !title) {
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
       }
     }
     let blockedReason: string | null = null;
-    if (!guardSynthetic) {
+    if (!guardSynthetic && !force) {
       if (guardSubject === "History" || guardSubject === "Science") {
         blockedReason = `${guardSubject} — assignments are never created (rule)`;
       } else if (guardDay === "Friday" && guardType !== "Test") {
