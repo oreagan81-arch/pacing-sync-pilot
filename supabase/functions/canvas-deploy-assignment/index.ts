@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       }
     }
     let blockedReason: string | null = null;
-    if (!guardSynthetic) {
+    if (!guardSynthetic && !force) {
       if (guardSubject === "History" || guardSubject === "Science") {
         blockedReason = `${guardSubject} — assignments are never created (rule)`;
       } else if (guardDay === "Friday" && guardType !== "Test") {
