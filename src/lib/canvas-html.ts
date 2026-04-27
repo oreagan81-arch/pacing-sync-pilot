@@ -229,7 +229,7 @@ ${items}
     if (row.type === 'X' || row.type === 'No Class' || row.type === '-') {
       const label = row.type === 'X' ? 'No School' : 'No Class';
       parts.push(`    <div id="${blockId}" class="">
-        <h3 class="" style="${DAY_HEADER_STYLE(quarterColor)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <h3 class="" style="${DAY_HEADER_STYLE(MAIN_HEADER_BLUE)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
         <p style="line-height: 1.5;"><em>${label}</em></p>
         <p>&nbsp;</p>
     </div>`);
@@ -266,8 +266,8 @@ ${items}
     const hasAtHome = !isFriday && row.at_home && row.at_home.trim();
 
     let dayHtml = `    <div id="${blockId}" class="">
-        <h3 class="" style="${DAY_HEADER_STYLE(quarterColor)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>In Class</strong></h4>
+        <h3 class="" style="${DAY_HEADER_STYLE(MAIN_HEADER_BLUE)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>In Class</strong></h4>
         <p style="line-height: 1.5;">${brevityText}</p>`;
 
     if (extraInClass) {
@@ -286,7 +286,7 @@ ${items}
       }
       dayHtml += `
         <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>At Home</strong></h4>
         <p style="line-height: 1.5;">${atHomeText}</p>`;
     }
 
@@ -296,7 +296,7 @@ ${items}
         if (!hasAtHome) {
           dayHtml += `
         <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>`;
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>At Home</strong></h4>`;
         }
         let linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
         if (er.canvas_url) linked = injectAssignmentLink(linked, er.canvas_url);
