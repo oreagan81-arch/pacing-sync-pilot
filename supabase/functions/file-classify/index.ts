@@ -67,20 +67,37 @@ Common naming patterns:
 
 Use the classify_file tool to return your answer.`;
 
-    const response = await fetch(AI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lovableApiKey}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        tools: [classifyTool],
-        tool_choice: { type: "function", function: { name: "classify_file" } },
-      }),
-    });
+    // Hard per-request timeout: prevents a stuck upstream call from
+    // burning the entire 150s edge IDLE_TIMEOUT budget. 20s is plenty
+    // for flash-lite + a single tool call.
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20_000);
+    let response: Response;
+    try {
+      response = await fetch(AI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${lovableApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+          tools: [classifyTool],
+          tool_choice: { type: "function", function: { name: "classify_file" } },
+        }),
+        signal: ac.signal,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      const aborted = err instanceof Error && err.name === "AbortError";
+      return new Response(
+        JSON.stringify({ error: aborted ? "AI upstream timed out after 20s" : "AI upstream failed" }),
+        { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    clearTimeout(timer);
 
     if (!response.ok) {
       const errText = await response.text();
