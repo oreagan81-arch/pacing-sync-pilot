@@ -294,7 +294,8 @@ ${items}
         <p>&nbsp;</p>
         <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>`;
         }
-        const linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
+        let linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
+        if (er.canvas_url) linked = injectAssignmentLink(linked, er.canvas_url);
         dayHtml += `
         <p style="line-height: 1.5;">${linked}</p>`;
       }
