@@ -159,9 +159,13 @@ export function generateCanvasPageHtml(params: CanvasPageParams): string {
   const parts: string[] = [];
 
   // 1. BANNER
+  // Brand lock: weekly-agenda banner + day headers are ALWAYS Thales Blue.
+  // `quarterColor` is preserved on the params for sub-blocks / redirect pages
+  // (History & Science) that legitimately need the quarter accent.
+  const MAIN_HEADER_BLUE = '#0065a7';
   parts.push(`<div id="kl_wrapper_3" class="kl_circle_left kl_wrapper" style="border-style: none;">
     <div id="kl_banner" class="">
-        <h2 class="" style="${BANNER_BG_STYLE(quarterColor)}"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${quarterColor};">${subject} \u2014 Weekly Agenda</span></h2>
+        <h2 class="" style="${BANNER_BG_STYLE(MAIN_HEADER_BLUE)}"><span id="kl_banner_right" class="" style="color: #ffffff; background-color: ${MAIN_HEADER_BLUE};">${subject} \u2014 Weekly Agenda</span></h2>
         <p class="kl_subtitle">${quarter}, Week ${weekNum} | ${dateRange}</p>
         <p class="kl_subtitle" style="color: #888888; font-size: 0.85em; margin-top: -4px;"><em>Last updated: ${formatLastUpdated()}</em></p>
     </div>`);
@@ -225,7 +229,7 @@ ${items}
     if (row.type === 'X' || row.type === 'No Class' || row.type === '-') {
       const label = row.type === 'X' ? 'No School' : 'No Class';
       parts.push(`    <div id="${blockId}" class="">
-        <h3 class="" style="${DAY_HEADER_STYLE(quarterColor)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <h3 class="" style="${DAY_HEADER_STYLE(MAIN_HEADER_BLUE)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
         <p style="line-height: 1.5;"><em>${label}</em></p>
         <p>&nbsp;</p>
     </div>`);
@@ -262,8 +266,8 @@ ${items}
     const hasAtHome = !isFriday && row.at_home && row.at_home.trim();
 
     let dayHtml = `    <div id="${blockId}" class="">
-        <h3 class="" style="${DAY_HEADER_STYLE(quarterColor)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>In Class</strong></h4>
+        <h3 class="" style="${DAY_HEADER_STYLE(MAIN_HEADER_BLUE)}"><i class="fas fa-school" aria-hidden="true"><span class="dp-icon-content" style="display: none;">&nbsp;</span></i>${day}</h3>
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>In Class</strong></h4>
         <p style="line-height: 1.5;">${brevityText}</p>`;
 
     if (extraInClass) {
@@ -282,7 +286,7 @@ ${items}
       }
       dayHtml += `
         <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>At Home</strong></h4>
         <p style="line-height: 1.5;">${atHomeText}</p>`;
     }
 
@@ -292,7 +296,7 @@ ${items}
         if (!hasAtHome) {
           dayHtml += `
         <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>`;
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>At Home</strong></h4>`;
         }
         let linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
         if (er.canvas_url) linked = injectAssignmentLink(linked, er.canvas_url);
