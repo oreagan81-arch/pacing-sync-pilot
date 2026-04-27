@@ -178,22 +178,31 @@ ${items}
     </div>`);
   }
 
-  // 3. RESOURCES — aggregated from per-day rows + week metadata
+  // 3. RESOURCES — aggregated from per-day rows + week metadata.
+  // Each `resources` field may be EITHER a JSON array (new structured format)
+  // OR newline-delimited free text (legacy). We normalize both into "Label | URL"
+  // strings (or plain labels) so renderResourceLine never sees raw JSON.
   const allResources: string[] = [];
-  for (const row of rows) {
-    if (row.resources && row.resources.trim()) {
-      row.resources.split('\n').filter(Boolean).forEach((r) => {
-        const trimmed = r.trim();
-        if (!allResources.includes(trimmed)) allResources.push(trimmed);
-      });
+  const pushUnique = (s: string) => {
+    const t = s.trim();
+    if (t && !allResources.includes(t)) allResources.push(t);
+  };
+  const ingest = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      // Structured JSON → expand to friendly "Label | URL" lines.
+      for (const r of parseResources(trimmed)) {
+        pushUnique(r.url ? `${r.label || r.url} | ${r.url}` : r.label);
+      }
+      return;
     }
+    trimmed.split('\n').filter(Boolean).forEach(pushUnique);
+  };
+  for (const row of rows) {
+    if (row.resources) ingest(row.resources);
   }
-  if (resources && resources.trim()) {
-    resources.split('\n').filter(Boolean).forEach((r) => {
-      const trimmed = r.trim();
-      if (!allResources.includes(trimmed)) allResources.push(trimmed);
-    });
-  }
+  if (resources) ingest(resources);
 
   if (allResources.length > 0) {
     const items = allResources.map(renderResourceLine).filter(Boolean).join('\n');
