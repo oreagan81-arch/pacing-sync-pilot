@@ -95,9 +95,10 @@ const BLOCK_IDS: Record<string, string> = {
   Friday: 'kl_custom_block_1',
 };
 
-// Mobile-friendly H4 divider style — replaces fixed width: 60%
+// "In Class" / "At Home" H4 divider — matches legacy style:
+// width 60%, dark #333333 bg, 40px left padding, accent left border in quarter color.
 const DIVIDER_STYLE = (color: string) =>
-  `color: #ffffff; background-color: #333333; padding: 6px 16px; border-left: 4px solid ${color}; border-width: 0 0 0 4px; max-width: 100%; width: auto; display: inline-block;`;
+  `color: #ffffff; background-color: #333333; padding: 6px 16px 6px 40px; border-left: 4px solid ${color}; border-width: 0 0 0 4px; width: 60%; max-width: 100%; display: block;`;
 
 const DAY_HEADER_STYLE = (color: string) =>
   `background-color: ${color}; color: #ffffff; border-color: ${color};`;
