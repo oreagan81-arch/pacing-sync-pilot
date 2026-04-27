@@ -6,6 +6,83 @@ const corsHeaders = {
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
+const REGEX_PATTERNS: { pattern: RegExp; subject: string; type: string; lessonExtract: RegExp | null }[] = [
+  { pattern: /SM5.*SG[_\s-]*(\d+)/i, subject: "Math", type: "study_guide", lessonExtract: /SG[_\s-]*(\d+)/i },
+  { pattern: /SM5.*AK[_\s-]*(\d+)/i, subject: "Math", type: "answer_key", lessonExtract: /AK[_\s-]*(\d+)/i },
+  { pattern: /SM5.*T[_\s-]*(\d+)/i, subject: "Math", type: "test", lessonExtract: /T[_\s-]*(\d+)/i },
+  { pattern: /SM5.*L[_\s-]*(\d+)/i, subject: "Math", type: "worksheet", lessonExtract: /L[_\s-]*(\d+)/i },
+  { pattern: /RM4.*(SPELL|SPELLING).*?(\d+)/i, subject: "Spelling", type: "test", lessonExtract: /(\d+)/ },
+  { pattern: /RM4.*(\d+)/i, subject: "Reading", type: "worksheet", lessonExtract: /(\d+)/ },
+  { pattern: /ELA4.*(\d+)/i, subject: "Language Arts", type: "worksheet", lessonExtract: /(\d+)/ },
+  { pattern: /SCI4.*(\d+)/i, subject: "Science", type: "resource", lessonExtract: /(\d+)/ },
+  { pattern: /HIS4.*(\d+)/i, subject: "History", type: "resource", lessonExtract: /(\d+)/ },
+];
+
+function classifyByRegex(filename: string) {
+  for (const rule of REGEX_PATTERNS) {
+    if (rule.pattern.test(filename)) {
+      const match = rule.lessonExtract ? filename.match(rule.lessonExtract) : null;
+      return {
+        subject: rule.subject,
+        type: rule.type,
+        lesson_num: match?.[1] ?? match?.[2] ?? "",
+      };
+    }
+  }
+  return null;
+}
+
+function normalizeFilename(filename: string) {
+  return filename
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function inferSubject(normalized: string) {
+  if (/(^| )sm5( |$)|math|saxon/.test(normalized)) return "Math";
+  if (/(^| )rm4( |$)|reading mastery|reading/.test(normalized)) return "Reading";
+  if (/(^| )ela4( |$)|language arts|(^| )la( |$)|grammar|writing/.test(normalized)) return "Language Arts";
+  if (/spelling|spell/.test(normalized)) return "Spelling";
+  if (/(^| )his4( |$)|history/.test(normalized)) return "History";
+  if (/(^| )sci4( |$)|science/.test(normalized)) return "Science";
+  return "Unknown";
+}
+
+function inferType(normalized: string) {
+  if (/answer key|(^| )ak( |$)| key$/.test(normalized)) return "answer_key";
+  if (/study guide|(^| )sg( |$)/.test(normalized)) return "study_guide";
+  if (/test|quiz|exam|assessment/.test(normalized)) return "test";
+  if (/worksheet|practice|lesson|classwork/.test(normalized)) return "worksheet";
+  return "resource";
+}
+
+function inferLessonNum(filename: string, normalized: string) {
+  const markerMatch =
+    filename.match(/SG[_\s-]*(\d+)/i) ||
+    filename.match(/AK[_\s-]*(\d+)/i) ||
+    filename.match(/T[_\s-]*(\d+)/i) ||
+    filename.match(/L[_\s-]*(\d+)/i);
+
+  if (markerMatch?.[1]) return markerMatch[1];
+
+  const digitMatch = normalized.match(/(^| )(\d{1,4})( |$)/);
+  return digitMatch?.[2] ?? "";
+}
+
+function classifyLocally(filename: string) {
+  const regexMatch = classifyByRegex(filename);
+  if (regexMatch) return regexMatch;
+
+  const normalized = normalizeFilename(filename);
+  return {
+    subject: inferSubject(normalized),
+    type: inferType(normalized),
+    lesson_num: inferLessonNum(filename, normalized),
+  };
+}
+
 const classifyTool = {
   type: "function" as const,
   function: {
@@ -47,10 +124,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    const localClassification = classifyLocally(filename);
+    if (localClassification.subject !== "Unknown") {
+      return new Response(JSON.stringify(localClassification), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!lovableApiKey) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
-        status: 500,
+      return new Response(JSON.stringify(localClassification), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -67,11 +150,10 @@ Common naming patterns:
 
 Use the classify_file tool to return your answer.`;
 
-    // Hard per-request timeout: prevents a stuck upstream call from
-    // burning the entire 150s edge IDLE_TIMEOUT budget. 20s is plenty
-    // for flash-lite + a single tool call.
+    // Keep the AI path short and best-effort only. If it stalls,
+    // return the local classification instead of surfacing a 504.
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 20_000);
+    const timer = setTimeout(() => ac.abort(), 8_000);
     let response: Response;
     try {
       response = await fetch(AI_URL, {
@@ -91,28 +173,27 @@ Use the classify_file tool to return your answer.`;
       });
     } catch (err) {
       clearTimeout(timer);
-      const aborted = err instanceof Error && err.name === "AbortError";
-      return new Response(
-        JSON.stringify({ error: aborted ? "AI upstream timed out after 20s" : "AI upstream failed" }),
-        { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify(localClassification), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     clearTimeout(timer);
 
     if (!response.ok) {
       const errText = await response.text();
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, please try again later." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify(localClassification), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Add funds in Settings > Workspace > Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify(localClassification), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return new Response(JSON.stringify({ error: `AI request failed: ${errText}` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      console.error("AI request failed", response.status, errText);
+      return new Response(JSON.stringify(localClassification), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -124,7 +205,7 @@ Use the classify_file tool to return your answer.`;
       try {
         parsed = JSON.parse(toolCall.function.arguments);
       } catch {
-        parsed = { subject: "Unknown", type: "resource", lesson_num: "" };
+        parsed = localClassification;
       }
     } else {
       // Fallback to content parsing
@@ -132,7 +213,7 @@ Use the classify_file tool to return your answer.`;
       try {
         parsed = JSON.parse(content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
       } catch {
-        parsed = { subject: "Unknown", type: "resource", lesson_num: "" };
+        parsed = localClassification;
       }
     }
 
