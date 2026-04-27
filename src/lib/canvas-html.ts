@@ -123,19 +123,35 @@ function formatLastUpdated(): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Resource line → <a> or text. Supports "Label | URL" pipe syntax.
+// Resource line → bulleted, indented <p>. Supports "Label | URL" pipe syntax.
+// Each resource gets its own line, prefixed with "•" and indented for readability.
 function renderResourceLine(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
+  // Defensive: if a raw JSON blob ever leaks in, parse it back to friendly lines.
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    const parsed = parseResources(trimmed);
+    if (parsed.length > 0) {
+      return parsed
+        .map((r) =>
+          r.url
+            ? `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${r.url}" target="_blank">${r.label || r.url}</a></p>`
+            : `        <p style="line-height: 1.5; margin-left: 16px;">• ${r.label}</p>`
+        )
+        .join('\n');
+    }
+    // Couldn't parse — drop it rather than show JSON to students.
+    return '';
+  }
   const pipe = trimmed.split('|').map((s) => s.trim());
   if (pipe.length === 2 && pipe[1].startsWith('http')) {
-    return `        <p style="line-height: 1.5;"><a href="${pipe[1]}" target="_blank">${pipe[0]}</a></p>`;
+    return `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${pipe[1]}" target="_blank">${pipe[0]}</a></p>`;
   }
   if (trimmed.startsWith('http')) {
     const label = trimmed.split('/').pop() || 'Resource';
-    return `        <p style="line-height: 1.5;"><a href="${trimmed}" target="_blank">${label}</a></p>`;
+    return `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${trimmed}" target="_blank">${label}</a></p>`;
   }
-  return `        <p style="line-height: 1.5;">${trimmed}</p>`;
+  return `        <p style="line-height: 1.5; margin-left: 16px;">• ${trimmed}</p>`;
 }
 
 export function generateCanvasPageHtml(params: CanvasPageParams): string {
