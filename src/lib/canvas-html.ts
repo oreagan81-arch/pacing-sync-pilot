@@ -7,6 +7,15 @@
 import { applyBrevity } from './assignment-logic';
 import { injectFileLinks, injectAssignmentLink, type ContentMapEntry } from './auto-link';
 import { COURSE_IDS } from './course-ids';
+import { parseResources } from '@/types/thales';
+
+/**
+ * THALES OS Brand Palette (verified):
+ *   Blue  = #0065a7  (Q1 / Reading family)
+ *   Pink  = #c51062  (Reminders accent)
+ *   Teal  = #00c0a5  (Resources accent)
+ * Pink + Teal are hard-coded below; Blue is supplied via `quarterColor`.
+ */
 
 export interface RedirectPageParams {
   thisSubject: 'History' | 'Science';
@@ -86,9 +95,10 @@ const BLOCK_IDS: Record<string, string> = {
   Friday: 'kl_custom_block_1',
 };
 
-// Mobile-friendly H4 divider style — replaces fixed width: 60%
+// "In Class" / "At Home" H4 divider — matches legacy style:
+// width 60%, dark #333333 bg, 40px left padding, accent left border in quarter color.
 const DIVIDER_STYLE = (color: string) =>
-  `color: #ffffff; background-color: #333333; padding: 6px 16px; border-left: 4px solid ${color}; border-width: 0 0 0 4px; max-width: 100%; width: auto; display: inline-block;`;
+  `color: #ffffff; background-color: #333333; padding: 6px 16px 6px 40px; border-left: 4px solid ${color}; border-width: 0 0 0 4px; width: 60%; max-width: 100%; display: block;`;
 
 const DAY_HEADER_STYLE = (color: string) =>
   `background-color: ${color}; color: #ffffff; border-color: ${color};`;
@@ -113,19 +123,35 @@ function formatLastUpdated(): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Resource line → <a> or text. Supports "Label | URL" pipe syntax.
+// Resource line → bulleted, indented <p>. Supports "Label | URL" pipe syntax.
+// Each resource gets its own line, prefixed with "•" and indented for readability.
 function renderResourceLine(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
+  // Defensive: if a raw JSON blob ever leaks in, parse it back to friendly lines.
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    const parsed = parseResources(trimmed);
+    if (parsed.length > 0) {
+      return parsed
+        .map((r) =>
+          r.url
+            ? `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${r.url}" target="_blank">${r.label || r.url}</a></p>`
+            : `        <p style="line-height: 1.5; margin-left: 16px;">• ${r.label}</p>`
+        )
+        .join('\n');
+    }
+    // Couldn't parse — drop it rather than show JSON to students.
+    return '';
+  }
   const pipe = trimmed.split('|').map((s) => s.trim());
   if (pipe.length === 2 && pipe[1].startsWith('http')) {
-    return `        <p style="line-height: 1.5;"><a href="${pipe[1]}" target="_blank">${pipe[0]}</a></p>`;
+    return `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${pipe[1]}" target="_blank">${pipe[0]}</a></p>`;
   }
   if (trimmed.startsWith('http')) {
     const label = trimmed.split('/').pop() || 'Resource';
-    return `        <p style="line-height: 1.5;"><a href="${trimmed}" target="_blank">${label}</a></p>`;
+    return `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${trimmed}" target="_blank">${label}</a></p>`;
   }
-  return `        <p style="line-height: 1.5;">${trimmed}</p>`;
+  return `        <p style="line-height: 1.5; margin-left: 16px;">• ${trimmed}</p>`;
 }
 
 export function generateCanvasPageHtml(params: CanvasPageParams): string {
@@ -152,22 +178,31 @@ ${items}
     </div>`);
   }
 
-  // 3. RESOURCES — aggregated from per-day rows + week metadata
+  // 3. RESOURCES — aggregated from per-day rows + week metadata.
+  // Each `resources` field may be EITHER a JSON array (new structured format)
+  // OR newline-delimited free text (legacy). We normalize both into "Label | URL"
+  // strings (or plain labels) so renderResourceLine never sees raw JSON.
   const allResources: string[] = [];
-  for (const row of rows) {
-    if (row.resources && row.resources.trim()) {
-      row.resources.split('\n').filter(Boolean).forEach((r) => {
-        const trimmed = r.trim();
-        if (!allResources.includes(trimmed)) allResources.push(trimmed);
-      });
+  const pushUnique = (s: string) => {
+    const t = s.trim();
+    if (t && !allResources.includes(t)) allResources.push(t);
+  };
+  const ingest = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      // Structured JSON → expand to friendly "Label | URL" lines.
+      for (const r of parseResources(trimmed)) {
+        pushUnique(r.url ? `${r.label || r.url} | ${r.url}` : r.label);
+      }
+      return;
     }
+    trimmed.split('\n').filter(Boolean).forEach(pushUnique);
+  };
+  for (const row of rows) {
+    if (row.resources) ingest(row.resources);
   }
-  if (resources && resources.trim()) {
-    resources.split('\n').filter(Boolean).forEach((r) => {
-      const trimmed = r.trim();
-      if (!allResources.includes(trimmed)) allResources.push(trimmed);
-    });
-  }
+  if (resources) ingest(resources);
 
   if (allResources.length > 0) {
     const items = allResources.map(renderResourceLine).filter(Boolean).join('\n');
@@ -235,10 +270,16 @@ ${items}
       dayHtml += `\n${extraInClass}`;
     }
 
-    // AT HOME — only if there's homework and it's not Friday
+    // AT HOME — only if there's homework and it's not Friday.
+    // If the row has a deployed assignment URL, wrap the homework text as a
+    // clickable link (e.g. "Lesson 102 evens" → opens the Canvas assignment).
+    // Otherwise render as plain text.
     if (hasAtHome) {
       let atHomeText = row.at_home!.trim();
       atHomeText = injectFileLinks(atHomeText, contentMap, row.subject);
+      if (row.canvas_url) {
+        atHomeText = injectAssignmentLink(atHomeText, row.canvas_url);
+      }
       dayHtml += `
         <p>&nbsp;</p>
         <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>
@@ -253,7 +294,8 @@ ${items}
         <p>&nbsp;</p>
         <h4 class="kl_solid_border" style="${DIVIDER_STYLE(quarterColor)}"><strong>At Home</strong></h4>`;
         }
-        const linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
+        let linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
+        if (er.canvas_url) linked = injectAssignmentLink(linked, er.canvas_url);
         dayHtml += `
         <p style="line-height: 1.5;">${linked}</p>`;
       }
