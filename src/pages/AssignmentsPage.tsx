@@ -430,7 +430,8 @@ export default function AssignmentsPage() {
                     {filtered.map((row) => {
                       const liveStatus = deployResults[row.rowKey] || row.status;
                       const isSkip = row.status === 'SKIP';
-                      const canSelect = row.status === 'NEW' || row.status === 'UPDATE';
+                      const isForced = forcedRows.has(row.rowKey);
+                      const canSelect = row.status === 'NEW' || row.status === 'UPDATE' || isForced;
                       const isExpanded = expanded.has(row.rowKey);
                       return (
                         <>
