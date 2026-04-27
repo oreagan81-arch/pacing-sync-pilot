@@ -135,8 +135,8 @@ function renderResourceLine(raw: string): string {
       return parsed
         .map((r) =>
           r.url
-            ? `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${r.url}" target="_blank">${r.label || r.url}</a></p>`
-            : `        <p style="line-height: 1.5; margin-left: 16px;">• ${r.label}</p>`
+            ? `        <p style="line-height: 1.5; margin-left: 20px;">• <a href="${r.url}" target="_blank">${r.label || r.url}</a></p>`
+            : `        <p style="line-height: 1.5; margin-left: 20px;">• ${r.label}</p>`
         )
         .join('\n');
     }
@@ -145,13 +145,13 @@ function renderResourceLine(raw: string): string {
   }
   const pipe = trimmed.split('|').map((s) => s.trim());
   if (pipe.length === 2 && pipe[1].startsWith('http')) {
-    return `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${pipe[1]}" target="_blank">${pipe[0]}</a></p>`;
+    return `        <p style="line-height: 1.5; margin-left: 20px;">• <a href="${pipe[1]}" target="_blank">${pipe[0]}</a></p>`;
   }
   if (trimmed.startsWith('http')) {
     const label = trimmed.split('/').pop() || 'Resource';
-    return `        <p style="line-height: 1.5; margin-left: 16px;">• <a href="${trimmed}" target="_blank">${label}</a></p>`;
+    return `        <p style="line-height: 1.5; margin-left: 20px;">• <a href="${trimmed}" target="_blank">${label}</a></p>`;
   }
-  return `        <p style="line-height: 1.5; margin-left: 16px;">• ${trimmed}</p>`;
+  return `        <p style="line-height: 1.5; margin-left: 20px;">• ${trimmed}</p>`;
 }
 
 export function generateCanvasPageHtml(params: CanvasPageParams): string {
