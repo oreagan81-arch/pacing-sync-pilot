@@ -25,7 +25,7 @@ function classifyByRegex(filename: string) {
       return {
         subject: rule.subject,
         type: rule.type,
-        lesson_num: match?.[1] ?? match?.[2] ?? "",
+        lesson_num: match ? match[match.length - 1] ?? "" : "",
       };
     }
   }
