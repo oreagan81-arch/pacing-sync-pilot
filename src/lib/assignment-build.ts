@@ -79,6 +79,11 @@ function buildDescription(
       lines.push(`<p>Math Fact Test <strong>${lessonNum}</strong>. Complete in class.</p>`);
     } else if (type === 'Study Guide') {
       lines.push(`<p>Study Guide for Lesson <strong>${lessonNum}</strong>. Bring to class.</p>`);
+      // Always link the canonical Study Guides folder (Math course 21957)
+      const folderUrl = 'https://thalesacademy.instructure.com/courses/21957/files/folder/Study%20Guides';
+      lines.push(
+        `<p>📁 <a href="${folderUrl}" target="_blank" rel="noopener">Open Study Guides folder</a> — find <strong>Lesson ${lessonNum}</strong>.</p>`,
+      );
       if (options?.isMondayTestStudyGuide) {
         lines.push(`<p><em>Note: distribute Friday prior so students can study over the weekend.</em></p>`);
       }
