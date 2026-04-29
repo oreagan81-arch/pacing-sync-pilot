@@ -43,6 +43,12 @@ interface Props {
   contentMap: ContentMapEntry[];
   subjectAccent: string; // hsl token e.g. 'hsl(var(--primary))'
   onChange: (field: keyof DayCellData, value: string | boolean | HintOverride) => void;
+  /**
+   * Optional. Fired when the teacher dismisses an auto-detected resource badge
+   * (X button). Receives the updated list of resources for this cell so the
+   * parent can persist the change.
+   */
+  onUpdate?: (resources: ContentMapEntry[]) => void;
 }
 
 const SUBJECT_ACCENTS: Record<string, string> = {
@@ -65,8 +71,12 @@ export function DaySubjectCard({
   availableTypes,
   contentMap,
   onChange,
+  onUpdate,
 }: Props) {
   const accent = SUBJECT_ACCENTS[subject] ?? 'hsl(var(--primary))';
+  // Locally-dismissed auto-resource refs (teacher clicked X). Stored as
+  // lesson_ref strings so the next render filters them out.
+  const [dismissedRefs, setDismissedRefs] = useState<string[]>([]);
 
   const isTest = cell.type?.toLowerCase().includes('test') ?? false;
   const isReview = cell.in_class?.toLowerCase().includes('review') ?? false;
