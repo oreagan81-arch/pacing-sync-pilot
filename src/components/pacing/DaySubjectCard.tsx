@@ -114,9 +114,18 @@ export function DaySubjectCard({
       (e) =>
         subjectFilter.includes(e.subject) &&
         e.canvas_url &&
+        !dismissedRefs.includes(e.lesson_ref) &&
         refs.some((r) => e.lesson_ref?.toLowerCase() === r.toLowerCase()),
     );
-  }, [contentMap, cell.lesson_num, subject]);
+  }, [contentMap, cell.lesson_num, subject, dismissedRefs]);
+
+  // Splice a single auto-detected resource off this cell's badge list.
+  // Notifies parent via onUpdate with the remaining list.
+  const handleRemoveResource = (lessonRef: string) => {
+    const next = resources.filter((r) => r.lesson_ref !== lessonRef);
+    setDismissedRefs((prev) => (prev.includes(lessonRef) ? prev : [...prev, lessonRef]));
+    onUpdate?.(next);
+  };
 
   // Seed default resources when an Investigation row gets a lesson number and resources are empty.
   // Three bullets: Investigation Student Book, Study Guide (Blank), Study Guide (Completed).
