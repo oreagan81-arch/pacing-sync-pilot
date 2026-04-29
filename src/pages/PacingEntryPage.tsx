@@ -379,6 +379,13 @@ export default function PacingEntryPage({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      <PacingEntryHeader
+        quarter={activeQuarter}
+        weekNum={activeWeek}
+        dateRange={dateRange}
+        onSyncResources={handleSyncResources}
+        syncing={syncingResources}
+      />
       {/* Sticky sub-header */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Quarter pills */}
