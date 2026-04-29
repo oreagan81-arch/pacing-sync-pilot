@@ -248,18 +248,25 @@ ${items}
       brevityText = injectAssignmentLink(brevityText, row.canvas_url);
     }
 
-    // For multiple subjects on the same day (Reading tab merges Reading + Spelling)
+    // For multiple subjects on the same day (Reading tab merges Reading + Spelling).
+    // MERGE RULE: concatenate extra-row lesson text into the SAME <p> as the
+    // primary in_class using <br/> so specific lesson strings (e.g. "Lesson 102")
+    // are never overwritten or visually separated from the main lesson line.
     const extraRows = dayRows.slice(1);
-    const extraInClass = extraRows
+    const extraInClassFragments = extraRows
       .map((r) => {
         const raw = (r.in_class || '').trim();
-        if (!raw) return `        <p style="line-height: 1.5;"><em style="color: #888;">Lesson plan TBD</em></p>`;
+        if (!raw) return '<em style="color: #888;">Lesson plan TBD</em>';
         let t = applyBrevity(r.subject, r.lesson_num, raw);
         t = injectFileLinks(t, contentMap, r.subject);
         t = injectAssignmentLink(t, r.canvas_url);
-        return `        <p style="line-height: 1.5;">${t}</p>`;
+        return t;
       })
-      .join('\n');
+      .filter(Boolean);
+    if (extraInClassFragments.length > 0) {
+      brevityText = `${brevityText}<br/>${extraInClassFragments.join('<br/>')}`;
+    }
+    const extraInClass = '';
 
     const isFriday = day === 'Friday';
     // Friday Rule #1: No At Home section on Friday pages — hard block
@@ -290,18 +297,29 @@ ${items}
         <p style="line-height: 1.5;">${atHomeText}</p>`;
     }
 
-    // Extra rows at-home (e.g. Spelling homework on Reading tab)
+    // Extra rows at-home (e.g. Spelling homework on Reading tab) — merge with
+    // <br/> into a single <p> so "Lesson N" strings are preserved verbatim.
+    const extraAtHomeFragments: string[] = [];
     for (const er of extraRows) {
       if (!isFriday && er.at_home && er.at_home.trim()) {
-        if (!hasAtHome) {
-          dayHtml += `
-        <p>&nbsp;</p>
-        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>At Home</strong></h4>`;
-        }
         let linked = injectFileLinks(er.at_home.trim(), contentMap, er.subject);
         if (er.canvas_url) linked = injectAssignmentLink(linked, er.canvas_url);
+        extraAtHomeFragments.push(linked);
+      }
+    }
+    if (extraAtHomeFragments.length > 0) {
+      if (!hasAtHome) {
         dayHtml += `
-        <p style="line-height: 1.5;">${linked}</p>`;
+        <p>&nbsp;</p>
+        <h4 class="kl_solid_border" style="${DIVIDER_STYLE(MAIN_HEADER_BLUE)}"><strong>At Home</strong></h4>
+        <p style="line-height: 1.5;">${extraAtHomeFragments.join('<br/>')}</p>`;
+      } else {
+        // Append to the existing At Home <p> via <br/> to preserve "Lesson N" strings.
+        dayHtml = dayHtml.replace(
+          /(<p style="line-height: 1\.5;">[^<]*<\/p>)(\s*$)/,
+          `$1`,
+        );
+        dayHtml += `<br/>${extraAtHomeFragments.join('<br/>')}`;
       }
     }
 

@@ -43,6 +43,12 @@ interface Props {
   contentMap: ContentMapEntry[];
   subjectAccent: string; // hsl token e.g. 'hsl(var(--primary))'
   onChange: (field: keyof DayCellData, value: string | boolean | HintOverride) => void;
+  /**
+   * Optional. Fired when the teacher dismisses an auto-detected resource badge
+   * (X button). Receives the updated list of resources for this cell so the
+   * parent can persist the change.
+   */
+  onUpdate?: (resources: ContentMapEntry[]) => void;
 }
 
 const SUBJECT_ACCENTS: Record<string, string> = {
@@ -65,8 +71,12 @@ export function DaySubjectCard({
   availableTypes,
   contentMap,
   onChange,
+  onUpdate,
 }: Props) {
   const accent = SUBJECT_ACCENTS[subject] ?? 'hsl(var(--primary))';
+  // Locally-dismissed auto-resource refs (teacher clicked X). Stored as
+  // lesson_ref strings so the next render filters them out.
+  const [dismissedRefs, setDismissedRefs] = useState<string[]>([]);
 
   const isTest = cell.type?.toLowerCase().includes('test') ?? false;
   const isReview = cell.in_class?.toLowerCase().includes('review') ?? false;
@@ -104,9 +114,18 @@ export function DaySubjectCard({
       (e) =>
         subjectFilter.includes(e.subject) &&
         e.canvas_url &&
+        !dismissedRefs.includes(e.lesson_ref) &&
         refs.some((r) => e.lesson_ref?.toLowerCase() === r.toLowerCase()),
     );
-  }, [contentMap, cell.lesson_num, subject]);
+  }, [contentMap, cell.lesson_num, subject, dismissedRefs]);
+
+  // Splice a single auto-detected resource off this cell's badge list.
+  // Notifies parent via onUpdate with the remaining list.
+  const handleRemoveResource = (lessonRef: string) => {
+    const next = resources.filter((r) => r.lesson_ref !== lessonRef);
+    setDismissedRefs((prev) => (prev.includes(lessonRef) ? prev : [...prev, lessonRef]));
+    onUpdate?.(next);
+  };
 
   // Seed default resources when an Investigation row gets a lesson number and resources are empty.
   // Three bullets: Investigation Student Book, Study Guide (Blank), Study Guide (Completed).
@@ -235,18 +254,35 @@ export function DaySubjectCard({
         {resources.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {resources.slice(0, 3).map((r) => (
-              <a
+              <span
                 key={r.lesson_ref + r.canvas_url}
-                href={r.canvas_url ?? '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/20 transition-colors"
+                className="inline-flex items-center gap-0.5 rounded bg-primary/10 pl-1.5 pr-0.5 py-0.5 text-[9px] text-primary hover:bg-primary/20 transition-colors"
                 title={r.canonical_name ?? r.lesson_ref}
               >
-                <FileText className="h-2.5 w-2.5" />
-                {r.lesson_ref}
-                <ExternalLink className="h-2 w-2" />
-              </a>
+                <a
+                  href={r.canvas_url ?? '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5"
+                >
+                  <FileText className="h-2.5 w-2.5" />
+                  {r.lesson_ref}
+                  <ExternalLink className="h-2 w-2" />
+                </a>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRemoveResource(r.lesson_ref);
+                  }}
+                  className="ml-0.5 rounded hover:bg-destructive/20 hover:text-destructive p-0.5 transition-colors"
+                  aria-label={`Remove ${r.lesson_ref}`}
+                  title="Remove from this cell"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
             ))}
             {resources.length > 3 && (
               <span className="text-[9px] text-muted-foreground">+{resources.length - 3}</span>

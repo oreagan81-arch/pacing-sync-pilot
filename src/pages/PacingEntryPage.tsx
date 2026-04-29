@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Save, Zap, Sheet, Loader2, CalendarDays } from 'lucide-react';
 import PasteImportDialog from '@/components/PasteImportDialog';
 import { DaySubjectCard, type DayCellData } from '@/components/pacing/DaySubjectCard';
+import { PacingEntryHeader } from '@/components/pacing-entry/PacingEntryHeader';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
@@ -96,16 +97,31 @@ export default function PacingEntryPage({
   const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
+  const [syncingResources, setSyncingResources] = useState(false);
 
   // Load content_map for resource badges
-  useEffect(() => {
-    supabase
+  const loadContentMap = useCallback(async () => {
+    const { data } = await supabase
       .from('content_map')
-      .select('lesson_ref, subject, canvas_url, canonical_name')
-      .then(({ data }) => {
-        if (data) setContentMap(data as ContentMapEntry[]);
-      });
+      .select('lesson_ref, subject, canvas_url, canonical_name');
+    if (data) setContentMap(data as ContentMapEntry[]);
   }, []);
+  useEffect(() => {
+    void loadContentMap();
+  }, [loadContentMap]);
+
+  // "Grab Resources" — re-pull the latest content_map for this week.
+  const handleSyncResources = useCallback(async () => {
+    setSyncingResources(true);
+    try {
+      await loadContentMap();
+      toast.success('Resources refreshed');
+    } catch (e: any) {
+      toast.error('Could not refresh resources', { description: e?.message });
+    } finally {
+      setSyncingResources(false);
+    }
+  }, [loadContentMap]);
 
   // Compute risk on every change
   useEffect(() => {
@@ -363,6 +379,13 @@ export default function PacingEntryPage({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      <PacingEntryHeader
+        quarter={activeQuarter}
+        weekNum={activeWeek}
+        dateRange={dateRange}
+        onSyncResources={handleSyncResources}
+        syncing={syncingResources}
+      />
       {/* Sticky sub-header */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Quarter pills */}
