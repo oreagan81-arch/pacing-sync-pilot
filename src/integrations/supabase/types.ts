@@ -226,6 +226,36 @@ export type Database = {
         }
         Relationships: []
       }
+      content_map_registry: {
+        Row: {
+          created_at: string
+          date_string: string
+          id: string
+          last_scanned: string
+          row_number: number
+          sheet_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date_string: string
+          id?: string
+          last_scanned?: string
+          row_number: number
+          sheet_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date_string?: string
+          id?: string
+          last_scanned?: string
+          row_number?: number
+          sheet_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       deploy_log: {
         Row: {
           action: string | null

@@ -128,6 +128,48 @@ Deno.serve(async (req) => {
       entity_ref: nextWeek.id,
     });
 
+    // ===== Admin email summary via Resend =====
+    try {
+      const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+      const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAIL') ?? 'onboarding@resend.dev';
+      const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'Pacing Bot <onboarding@resend.dev>';
+
+      if (RESEND_API_KEY) {
+        const succeeded: string[] = [];
+        const failed: { subject: string; error: string }[] = [];
+        for (const [subj, info] of Object.entries(log.subjects as Record<string, any>)) {
+          if (info?.error) failed.push({ subject: subj, error: String(info.error) });
+          else succeeded.push(subj);
+        }
+
+        const html = `
+          <h2>Friday Sync — ${nextWeek.quarter}W${nextWeek.week_num}</h2>
+          <p><strong>Succeeded (${succeeded.length}):</strong> ${succeeded.join(', ') || '—'}</p>
+          <p><strong>Failed (${failed.length}):</strong></p>
+          <ul>${failed.map(f => `<li><b>${f.subject}</b>: ${f.error}</li>`).join('') || '<li>None</li>'}</ul>
+        `;
+
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: FROM_EMAIL,
+            to: [ADMIN_EMAIL],
+            subject: `Friday Sync ${nextWeek.quarter}W${nextWeek.week_num} — ${succeeded.length} ok / ${failed.length} failed`,
+            html,
+          }),
+        });
+        if (!r.ok) console.error('Resend email failed:', r.status, await r.text());
+      } else {
+        console.warn('RESEND_API_KEY not set — skipping admin notification');
+      }
+    } catch (mailErr) {
+      console.error('Admin email error:', mailErr);
+    }
+
     return log;
   }, { jobName: JOB_NAME });
 
