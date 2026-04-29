@@ -254,18 +254,35 @@ export function DaySubjectCard({
         {resources.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {resources.slice(0, 3).map((r) => (
-              <a
+              <span
                 key={r.lesson_ref + r.canvas_url}
-                href={r.canvas_url ?? '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/20 transition-colors"
+                className="inline-flex items-center gap-0.5 rounded bg-primary/10 pl-1.5 pr-0.5 py-0.5 text-[9px] text-primary hover:bg-primary/20 transition-colors"
                 title={r.canonical_name ?? r.lesson_ref}
               >
-                <FileText className="h-2.5 w-2.5" />
-                {r.lesson_ref}
-                <ExternalLink className="h-2 w-2" />
-              </a>
+                <a
+                  href={r.canvas_url ?? '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5"
+                >
+                  <FileText className="h-2.5 w-2.5" />
+                  {r.lesson_ref}
+                  <ExternalLink className="h-2 w-2" />
+                </a>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRemoveResource(r.lesson_ref);
+                  }}
+                  className="ml-0.5 rounded hover:bg-destructive/20 hover:text-destructive p-0.5 transition-colors"
+                  aria-label={`Remove ${r.lesson_ref}`}
+                  title="Remove from this cell"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
             ))}
             {resources.length > 3 && (
               <span className="text-[9px] text-muted-foreground">+{resources.length - 3}</span>
