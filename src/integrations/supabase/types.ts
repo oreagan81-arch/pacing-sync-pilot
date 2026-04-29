@@ -270,6 +270,33 @@ export type Database = {
           },
         ]
       }
+      deploy_logs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          status: string
+          subject: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          status: string
+          subject?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          status?: string
+          subject?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       deploy_notifications: {
         Row: {
           created_at: string

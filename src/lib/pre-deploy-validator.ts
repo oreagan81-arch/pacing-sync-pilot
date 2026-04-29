@@ -4,9 +4,55 @@
  * Each check returns 'pass' | 'warn' | 'fail' so the modal can render
  * a red/amber/green status. Failures should block deploy; warnings allow override.
  */
+import { z } from 'zod';
 import type { BuiltAssignment } from './assignment-build';
 import type { ContentMapEntry } from './auto-link';
 import { isFriday } from './friday-rules';
+
+/* ============================================================
+ * Zod schema — strict validation for Canvas deploy payloads.
+ * Blocks malformed data before it ever hits Canvas.
+ * ============================================================ */
+
+const dayEntrySchema = z
+  .object({
+    inClass: z.string().optional(),
+    lesson: z.string().optional(),
+    atHome: z.string().optional(),
+    homework: z.string().optional(),
+    atHomeUrl: z.string().url('atHomeUrl must be a valid URL').optional(),
+  })
+  .passthrough();
+
+export const canvasPayloadSchema = z.object({
+  subject: z.string().min(1, 'subject is required'),
+  weekLabel: z.string().min(1, 'weekLabel is required'),
+  dateRange: z.string().min(1, 'dateRange is required'),
+  days: z.record(z.string(), dayEntrySchema),
+});
+
+export type CanvasPayload = z.infer<typeof canvasPayloadSchema>;
+
+export interface CanvasPayloadValidation {
+  ok: boolean;
+  data?: CanvasPayload;
+  errors?: string[];
+}
+
+/**
+ * Validate a Canvas deploy payload. Returns `{ ok: false, errors }` on
+ * malformed input so the caller can block the deployment. Never throws.
+ */
+export function validateCanvasPayload(input: unknown): CanvasPayloadValidation {
+  const parsed = canvasPayloadSchema.safeParse(input);
+  if (parsed.success) {
+    return { ok: true, data: parsed.data };
+  }
+  const errors = parsed.error.issues.map(
+    (i) => `${i.path.join('.') || '<root>'}: ${i.message}`,
+  );
+  return { ok: false, errors };
+}
 
 export type CheckLevel = 'pass' | 'warn' | 'fail';
 
