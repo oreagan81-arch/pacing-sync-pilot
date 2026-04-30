@@ -25,6 +25,7 @@ interface SystemState {
 
   setSelectedMonth: (m: string) => void;
   setSelectedWeek: (w: number) => void;
+  clearCache: () => void;
   setPacingData: (d: PacingData | null) => void;
   setIsLoading: (l: boolean) => void;
   setSystemStatus: (s: 'online' | 'offline' | 'checking') => void;
@@ -53,7 +54,25 @@ export const useSystemStore = create<SystemState>((set, get) => ({
   systemStatus: 'checking',
 
   setSelectedMonth: (m) => set({ selectedMonth: m }),
-  setSelectedWeek: (w) => set({ selectedWeek: w }),
+  setSelectedWeek: (w) => {
+    // Stale-cache guard: the placeholder "Lesson 91" has historically leaked
+    // into rows when GAS returns a partial payload. If we detect it in the
+    // current cache, wipe and force a fresh fetch from Supabase/GAS.
+    const current = get().pacingData;
+    const hasStalePlaceholder =
+      !!current &&
+      Object.values(current.subjects || {}).some((cells) =>
+        (cells || []).some((c) => /lesson\s*91\b/i.test(c?.value ?? '')),
+      );
+    if (hasStalePlaceholder) {
+      get().clearCache();
+      const month = get().selectedMonth;
+      // Fire-and-forget refresh with the new week
+      void get().fetchPacingData(month, w);
+    }
+    set({ selectedWeek: w });
+  },
+  clearCache: () => set({ pacingData: null }),
   setPacingData: (d) => set({ pacingData: d }),
   setIsLoading: (l) => set({ isLoading: l }),
   setSystemStatus: (s) => set({ systemStatus: s }),

@@ -20,8 +20,23 @@ export function StyleSuggestions({ type, subject, label, onPick }: Props) {
   const [items, setItems] = useState<Suggestion[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
+  // Institutional brand color — AI suggestions MUST NOT propose changing this.
+  const INSTITUTIONAL_PRIMARY = '#0065a7';
+
   useEffect(() => {
-    getSuggestions(type, subject, 5).then(setItems).catch(() => setItems([]));
+    getSuggestions(type, subject, 5)
+      .then((all) => {
+        // Suggestion lockdown: drop any pattern whose value contains a hex
+        // color that would override the institutional primary #0065a7.
+        const locked = (all || []).filter((s) => {
+          const v = (s?.value ?? '').toLowerCase();
+          const hexes = v.match(/#[0-9a-f]{3,8}\b/g) || [];
+          if (hexes.length === 0) return true;
+          return hexes.every((h) => h === INSTITUTIONAL_PRIMARY.toLowerCase());
+        });
+        setItems(locked);
+      })
+      .catch(() => setItems([]));
   }, [type, subject]);
 
   if (items.length === 0) return null;
