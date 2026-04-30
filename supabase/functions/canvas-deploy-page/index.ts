@@ -210,16 +210,30 @@ Deno.serve(async (req) => {
     }
 
     // 3. Create or update the page
-    // Front-page guard: if existing page is already a front page, FORCE published: true on every PUT
+    // FRONT-PAGE GUARD — non-negotiable.
+    // Per Core rule: every PUT touching a front_page MUST include
+    // published:true. We just performed a GET above; if Canvas reports
+    // front_page:true we forcefully inject published:true into the PUT
+    // payload, ignoring whatever the frontend requested. This plays nicely
+    // with friday-publish (which only flips published true→true on Fridays)
+    // because we never publish a page that wasn't already a front page.
     let pub = published ?? false;
-    if (isFrontPage || setFrontPage) pub = true;
+    const willBeFrontPage = isFrontPage || setFrontPage === true;
+    if (willBeFrontPage) {
+      if (pub !== true) {
+        console.warn(
+          `[front-page-guard] Forcing published:true on PUT for ${pageUrl} (frontend sent published=${published})`,
+        );
+      }
+      pub = true;
+    }
 
     const payload = {
       wiki_page: {
         title: pageTitle,
         body: bodyHtml,
         published: pub,
-        ...(setFrontPage || isFrontPage ? { front_page: true } : {}),
+        ...(willBeFrontPage ? { front_page: true } : {}),
       },
     };
 
