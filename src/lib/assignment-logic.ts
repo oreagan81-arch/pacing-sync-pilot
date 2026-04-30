@@ -85,15 +85,18 @@ export function resolveAssignmentGroup(subject: string, type: string): Assignmen
 }
 
 export function applyBrevity(subject: string, lessonNum: string | null, inClass: string): string {
+  // Brevity Mandate: strip the verbose "Saxon Math" prefix from any input.
+  const stripped = (inClass || '').replace(/saxon\s*math/gi, '').replace(/\s{2,}/g, ' ').trim();
+
   if (subject === 'Math') return `Lesson ${lessonNum || ''}`.trim();
   if (subject === 'Reading') return `Reading Lesson ${lessonNum || ''}`.trim();
   if (subject === 'Language Arts') {
-    const chMatch = inClass?.match(/Chapter\s*(\d+)/i);
-    const lesMatch = inClass?.match(/Lesson\s*(\d+)/i);
+    const chMatch = stripped.match(/Chapter\s*(\d+)/i);
+    const lesMatch = stripped.match(/Lesson\s*(\d+)/i);
     if (chMatch && lesMatch) return `Chapter ${chMatch[1]}, Lesson ${lesMatch[1]}`;
     if (lesMatch) return `Lesson ${lesMatch[1]}`;
   }
-  return inClass || '';
+  return stripped;
 }
 
 export async function computeContentHash(
