@@ -408,6 +408,45 @@ export type Database = {
         }
         Relationships: []
       }
+      learning_rules: {
+        Row: {
+          applied_count: number
+          corrected_lesson: string | null
+          corrected_subject: string | null
+          corrected_type: string | null
+          created_at: string
+          id: string
+          last_applied: string | null
+          name_pattern: string | null
+          original_name: string
+          updated_at: string
+        }
+        Insert: {
+          applied_count?: number
+          corrected_lesson?: string | null
+          corrected_subject?: string | null
+          corrected_type?: string | null
+          created_at?: string
+          id?: string
+          last_applied?: string | null
+          name_pattern?: string | null
+          original_name: string
+          updated_at?: string
+        }
+        Update: {
+          applied_count?: number
+          corrected_lesson?: string | null
+          corrected_subject?: string | null
+          corrected_type?: string | null
+          created_at?: string
+          id?: string
+          last_applied?: string | null
+          name_pattern?: string | null
+          original_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       newsletters: {
         Row: {
           birthdays: string | null
