@@ -20,8 +20,23 @@ export function StyleSuggestions({ type, subject, label, onPick }: Props) {
   const [items, setItems] = useState<Suggestion[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
+  // Institutional brand color — AI suggestions MUST NOT propose changing this.
+  const INSTITUTIONAL_PRIMARY = '#0065a7';
+
   useEffect(() => {
-    getSuggestions(type, subject, 5).then(setItems).catch(() => setItems([]));
+    getSuggestions(type, subject, 5)
+      .then((all) => {
+        // Suggestion lockdown: filter out any pattern that would change the
+        // primary brand color away from #0065a7.
+        const locked = (all || []).filter((s) => {
+          if (type !== 'color' && type !== 'primary_color') return true;
+          const v = (s?.value ?? '').toLowerCase().replace(/\s+/g, '');
+          // Allow only suggestions that match the institutional primary.
+          return v === INSTITUTIONAL_PRIMARY.toLowerCase();
+        });
+        setItems(locked);
+      })
+      .catch(() => setItems([]));
   }, [type, subject]);
 
   if (items.length === 0) return null;
