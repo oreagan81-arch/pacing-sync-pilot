@@ -26,13 +26,13 @@ export function StyleSuggestions({ type, subject, label, onPick }: Props) {
   useEffect(() => {
     getSuggestions(type, subject, 5)
       .then((all) => {
-        // Suggestion lockdown: filter out any pattern that would change the
-        // primary brand color away from #0065a7.
+        // Suggestion lockdown: drop any pattern whose value contains a hex
+        // color that would override the institutional primary #0065a7.
         const locked = (all || []).filter((s) => {
-          if (type !== 'color' && type !== 'primary_color') return true;
-          const v = (s?.value ?? '').toLowerCase().replace(/\s+/g, '');
-          // Allow only suggestions that match the institutional primary.
-          return v === INSTITUTIONAL_PRIMARY.toLowerCase();
+          const v = (s?.value ?? '').toLowerCase();
+          const hexes = v.match(/#[0-9a-f]{3,8}\b/g) || [];
+          if (hexes.length === 0) return true;
+          return hexes.every((h) => h === INSTITUTIONAL_PRIMARY.toLowerCase());
         });
         setItems(locked);
       })
