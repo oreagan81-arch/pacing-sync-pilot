@@ -73,6 +73,129 @@ async function fetchCanvasFilesPage(baseUrl: string, token: string, courseId: nu
   return await r.json();
 }
 
+/**
+ * Build a fuzzy pattern key for a filename — strips lesson digits and the extension
+ * so that "SM5_L_004.pdf" and "SM5_L_005.pdf" share a pattern. This is what we
+ * match against `learning_rules.name_pattern` when the exact original_name miss.
+ */
+function patternKey(filename: string): string {
+  return filename
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/\d+/g, "#")
+    .replace(/[\s_\-]+/g, "_");
+}
+
+interface LearningRuleHit {
+  subject: string | null;
+  type: string | null;
+  lessonNum: string | null;
+  ruleId: string;
+  matchKind: "exact" | "pattern";
+}
+
+async function lookupLearningRule(
+  supabase: ReturnType<typeof createClient>,
+  filename: string,
+): Promise<LearningRuleHit | null> {
+  // 1. Exact original_name match (case-insensitive via lower() unique index)
+  const { data: exact } = await supabase
+    .from("learning_rules")
+    .select("id, corrected_subject, corrected_type, corrected_lesson")
+    .ilike("original_name", filename)
+    .maybeSingle();
+  if (exact) {
+    return {
+      subject: exact.corrected_subject,
+      type: exact.corrected_type,
+      lessonNum: exact.corrected_lesson,
+      ruleId: exact.id,
+      matchKind: "exact",
+    };
+  }
+  // 2. Fuzzy pattern match
+  const key = patternKey(filename);
+  const { data: byPattern } = await supabase
+    .from("learning_rules")
+    .select("id, corrected_subject, corrected_type, corrected_lesson")
+    .eq("name_pattern", key)
+    .order("applied_count", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (byPattern) {
+    return {
+      subject: byPattern.corrected_subject,
+      type: byPattern.corrected_type,
+      lessonNum: byPattern.corrected_lesson,
+      ruleId: byPattern.id,
+      matchKind: "pattern",
+    };
+  }
+  return null;
+}
+
+/**
+ * Ask Lovable AI Gateway (Gemini) to guess subject/type/lesson from a filename.
+ * Returns null on any failure — caller falls back to regex / unclassified.
+ */
+async function classifyWithGemini(
+  filename: string,
+  defaultSubject: string | null,
+): Promise<{ subject: string | null; type: string | null; lessonNum: string | null } | null> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return null;
+  try {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Classify a 4th-grade course file by its filename. Subjects: Math, Reading, Spelling, Language Arts, History, Science. Types: worksheet, test, study_guide, answer_key, resource. Return null fields when unsure.",
+          },
+          { role: "user", content: `Filename: ${filename}\nCourse hint: ${defaultSubject ?? "unknown"}` },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "classify_file",
+              description: "Return the parsed subject, type, and lesson number.",
+              parameters: {
+                type: "object",
+                properties: {
+                  subject: { type: ["string", "null"] },
+                  type: { type: ["string", "null"] },
+                  lesson_num: { type: ["string", "null"] },
+                },
+                required: ["subject", "type", "lesson_num"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "classify_file" } },
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const args = j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!args) return null;
+    const parsed = JSON.parse(args);
+    return {
+      subject: parsed.subject || null,
+      type: parsed.type || null,
+      lessonNum: parsed.lesson_num ? String(parsed.lesson_num) : null,
+    };
+  } catch (e) {
+    console.warn("[gemini classify] failed:", e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -122,7 +245,25 @@ Deno.serve(async (req) => {
           let lessonNum: string | null = null;
           let slug: string | null = null;
 
-          if (cls) {
+          // 1) Learning-rules first — bypass the AI when we've corrected this filename before.
+          const rule = await lookupLearningRule(supabase, displayName);
+          if (rule && (rule.subject || rule.type || rule.lessonNum)) {
+            subject = rule.subject ?? subject;
+            type = rule.type ?? null;
+            lessonNum = rule.lessonNum ?? null;
+            confidence = `learned_${rule.matchKind}`;
+            if (subject && type) {
+              friendly = generateFriendlyName(subject, type, lessonNum ?? "", ext);
+              slug = generateSlug(subject, type, lessonNum ?? "");
+            }
+            stats.classified++;
+            // Bump usage count (fire and forget)
+            await supabase
+              .from("learning_rules")
+              .update({ applied_count: (await supabase.from("learning_rules").select("applied_count").eq("id", rule.ruleId).maybeSingle()).data?.applied_count + 1 || 1, last_applied: now })
+              .eq("id", rule.ruleId);
+          } else if (cls) {
+            // 2) Regex match
             subject = cls.subject;
             type = cls.type;
             lessonNum = cls.lessonNum || null;
@@ -130,6 +271,18 @@ Deno.serve(async (req) => {
             friendly = generateFriendlyName(cls.subject, cls.type, cls.lessonNum, ext);
             slug = generateSlug(cls.subject, cls.type, cls.lessonNum);
             stats.classified++;
+          } else {
+            // 3) Gemini fallback
+            const ai = await classifyWithGemini(displayName, subject);
+            if (ai && ai.subject && ai.type) {
+              subject = ai.subject;
+              type = ai.type;
+              lessonNum = ai.lessonNum;
+              confidence = "ai";
+              friendly = generateFriendlyName(subject, type, lessonNum ?? "", ext);
+              slug = generateSlug(subject, type, lessonNum ?? "");
+              stats.classified++;
+            }
           }
 
           const needsRename = !!friendly && friendly !== displayName;
