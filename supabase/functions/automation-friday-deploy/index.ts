@@ -128,6 +128,45 @@ Deno.serve(async (req) => {
       entity_ref: nextWeek.id,
     });
 
+    // ===== Flush QUEUED newsletters → Homeroom course (22254) =====
+    const newsletterResults: Array<{ id: string; ok: boolean; error?: string }> = [];
+    try {
+      const { data: queued, error: nErr } = await sb
+        .from('newsletters')
+        .select('id, date_range, html_content')
+        .eq('status', 'QUEUED');
+      if (nErr) throw nErr;
+
+      for (const n of queued ?? []) {
+        try {
+          if (!n.html_content) {
+            newsletterResults.push({ id: n.id, ok: false, error: 'empty html_content' });
+            continue;
+          }
+          const slug = `newsletter-${(n.date_range ?? 'latest').replace(/\s+/g, '-').toLowerCase()}`;
+          await invokeFn('canvas-deploy-page', {
+            subject: 'Homeroom',
+            courseId: 22254,
+            pageUrl: slug,
+            pageTitle: `Newsletter — ${n.date_range ?? 'Latest'}`,
+            bodyHtml: n.html_content,
+            published: true,
+          });
+          await sb
+            .from('newsletters')
+            .update({ status: 'DEPLOYED', posted_at: new Date().toISOString() })
+            .eq('id', n.id);
+          newsletterResults.push({ id: n.id, ok: true });
+        } catch (e) {
+          newsletterResults.push({ id: n.id, ok: false, error: String(e) });
+        }
+      }
+      (log as Record<string, unknown>).newsletters = newsletterResults;
+    } catch (nErr) {
+      console.error('newsletter flush error', nErr);
+      (log as Record<string, unknown>).newsletters_error = String(nErr);
+    }
+
     // ===== Admin email summary via Resend =====
     try {
       const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
