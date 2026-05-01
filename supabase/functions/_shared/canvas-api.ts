@@ -3,8 +3,46 @@
 
 const RAW_BASE = Deno.env.get('CANVAS_BASE_URL') ?? 'https://thalesacademy.instructure.com';
 const TOKEN = Deno.env.get('CANVAS_API_TOKEN') ?? '';
+const SYSTEM_MODE = (Deno.env.get('SYSTEM_MODE') ?? 'LIVE').toUpperCase();
 
 export const CANVAS_BASE = RAW_BASE.replace(/\/+$/, '');
+export const IS_DEV_MODE = SYSTEM_MODE === 'DEV';
+
+const WRITE_METHODS = new Set(['PUT', 'POST', 'DELETE', 'PATCH']);
+
+/**
+ * Mocked OK response used when DEV mode intercepts a Canvas write.
+ * Shape mirrors a tiny subset of `Response` so callers using `.ok` / `.status`
+ * / `.json()` / `.text()` continue to work without code changes.
+ */
+function mockedOkResponse(): Response {
+  return new Response(
+    JSON.stringify({ ok: true, status: 200, mocked: true, mode: 'DEV' }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+/**
+ * Global write guard. Any module in this project that performs Canvas
+ * mutations should funnel through `canvasWrite` instead of raw `fetch`.
+ * In DEV mode, writes are silently aborted and return a 200 mock.
+ */
+export async function canvasWrite(url: string, init: RequestInit): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  if (IS_DEV_MODE && WRITE_METHODS.has(method)) {
+    console.log('DEV MODE: Canvas Write Aborted', { method, url });
+    return mockedOkResponse();
+  }
+  return fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(init.headers ?? {}),
+    },
+  });
+}
 
 export interface CanvasPage {
   page_id: number;
