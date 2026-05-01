@@ -85,6 +85,11 @@ export interface CanvasFile {
 }
 
 async function fetchWithRetry(url: string, init?: RequestInit, attempt = 0): Promise<Response> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (IS_DEV_MODE && WRITE_METHODS.has(method)) {
+    console.log('DEV MODE: Canvas Write Aborted', { method, url });
+    return mockedOkResponse();
+  }
   const res = await fetch(url, {
     ...init,
     headers: {
