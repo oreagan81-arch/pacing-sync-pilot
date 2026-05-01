@@ -10,12 +10,13 @@
  *     so specific strings like "Lesson 102" are preserved verbatim on the
  *     deployed Canvas page.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   filterTogetherPageRows,
   isTogetherSubject,
   TOGETHER_PAGE_OWNER,
 } from '@/lib/together-logic';
+import { callEdge } from '@/lib/edge';
 
 export interface MergeableRow {
   day: string;
@@ -101,4 +102,67 @@ export function usePageBuilder<T extends MergeableRow>(
     }
     return filtered;
   }, [rows, activeSubject]);
+}
+
+/**
+ * AI agenda enrichment — generates a 2-3 sentence parent-friendly preview
+ * of the week's lessons using Gemini. Returns `''` while loading or on error.
+ *
+ * Pass the resulting `aiSummary` into `generateCanvasPageHtml(...)` so the
+ * Canvas page renders the italic blue-bordered summary block under the banner.
+ */
+export function useAgendaSummary(
+  subject: string,
+  weekLabel: string | undefined,
+  rows: MergeableRow[],
+): { aiSummary: string; loading: boolean } {
+  const [aiSummary, setAiSummary] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Stable signature so we only refetch when meaningful content changes.
+  const signature = useMemo(
+    () =>
+      JSON.stringify(
+        rows
+          .filter((r) => (r.in_class ?? '').trim())
+          .map((r) => [r.day, r.type, r.lesson_num, r.in_class]),
+      ),
+    [rows],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!subject || !rows.length) {
+      setAiSummary('');
+      return;
+    }
+    setLoading(true);
+    const lite = rows.map((r) => ({
+      day: r.day,
+      type: r.type,
+      lesson_num: r.lesson_num,
+      in_class: r.in_class,
+      at_home: r.at_home,
+    }));
+    callEdge<{ summary: string }>('page-ai-summary', {
+      subject,
+      weekLabel,
+      rows: lite,
+    })
+      .then((res) => {
+        if (!cancelled) setAiSummary(res?.summary ?? '');
+      })
+      .catch(() => {
+        if (!cancelled) setAiSummary('');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject, weekLabel, signature]);
+
+  return { aiSummary, loading };
 }

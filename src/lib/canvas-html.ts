@@ -72,6 +72,8 @@ export interface CanvasPageParams {
   resources: string;
   quarterColor: string;
   contentMap?: ContentMapEntry[];
+  /** Optional AI-generated, parent-friendly 2-3 sentence summary rendered just below the banner. */
+  aiSummary?: string;
 }
 
 export interface HomeroomPageParams {
@@ -155,7 +157,7 @@ function renderResourceLine(raw: string): string {
 }
 
 export function generateCanvasPageHtml(params: CanvasPageParams): string {
-  const { subject, rows, quarter, weekNum, dateRange, reminders, resources, quarterColor, contentMap = [] } = params;
+  const { subject, rows, quarter, weekNum, dateRange, reminders, resources, quarterColor, contentMap = [], aiSummary } = params;
   const parts: string[] = [];
 
   // 1. BANNER
@@ -169,6 +171,11 @@ export function generateCanvasPageHtml(params: CanvasPageParams): string {
         <p class="kl_subtitle">${quarter}, Week ${weekNum} | ${dateRange}</p>
         <p class="kl_subtitle" style="color: #888888; font-size: 0.85em; margin-top: -4px;"><em>Last updated: ${formatLastUpdated()}</em></p>
     </div>`);
+
+  // 1b. AI SUMMARY (parent-friendly preview, just below the banner)
+  if (aiSummary && aiSummary.trim()) {
+    parts.push(`    <div id="kl_custom_block_ai" style="color:#555; font-style:italic; border-left:3px solid #0065a7; padding-left:12px; margin:8px 0 16px;">${aiSummary.trim()}</div>`);
+  }
 
   // 2. REMINDERS (omit if empty)
   if (reminders && reminders.trim()) {
