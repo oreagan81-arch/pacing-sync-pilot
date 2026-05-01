@@ -215,7 +215,7 @@ export default function NewsletterPage() {
             Save Draft
           </Button>
           <Button size="sm" onClick={handlePost} disabled={posting || !htmlContent} className="gap-1.5">
-            <Send className="h-3.5 w-3.5" /> Post to Canvas
+            <Send className="h-3.5 w-3.5" /> Queue for Friday
           </Button>
         </div>
       </div>
