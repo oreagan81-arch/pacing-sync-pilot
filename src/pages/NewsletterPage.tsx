@@ -152,26 +152,32 @@ export default function NewsletterPage() {
   };
 
   const handlePost = async () => {
-    if (!htmlContent || !config) { toast.error('Generate HTML first'); return; }
+    if (!htmlContent) { toast.error('Generate HTML first'); return; }
     setPosting(true);
     try {
-      const courseId = config.courseIds['Homeroom'] || 22254;
-      const pageUrl = `newsletter-${dateRange.replace(/\s+/g, '-').toLowerCase() || 'latest'}`;
-      await callEdge('canvas-deploy-page', {
-        subject: 'Homeroom',
-        courseId,
-        pageUrl,
-        pageTitle: `Newsletter — ${dateRange || 'Latest'}`,
-        bodyHtml: htmlContent,
-        published: true,
-      });
+      // QUEUE — does NOT publish to Canvas immediately. The Friday automation
+      // (automation-friday-deploy) will pick up QUEUED newsletters at 4 PM ET
+      // and deploy them to the Homeroom course (22254).
+      const payload = {
+        date_range: dateRange,
+        homeroom_notes: homeroomNotes,
+        birthdays,
+        extra_sections: extraSections,
+        html_content: htmlContent,
+        status: 'QUEUED',
+      };
       if (activeNewsletterId) {
-        await supabase.from('newsletters').update({ status: 'POSTED', posted_at: new Date().toISOString() }).eq('id', activeNewsletterId);
+        await supabase.from('newsletters').update(payload).eq('id', activeNewsletterId);
+      } else {
+        const { data } = await supabase.from('newsletters').insert(payload).select('id').single();
+        if (data) setActiveNewsletterId(data.id);
       }
-      toast.success('Newsletter posted to Canvas!');
+      toast.success('Newsletter queued', {
+        description: 'It will deploy to Canvas Homeroom on Friday at 4 PM ET.',
+      });
       loadNewsletters();
     } catch (e: any) {
-      toast.error('Post failed', { description: e.message });
+      toast.error('Queue failed', { description: e.message });
     }
     setPosting(false);
   };
