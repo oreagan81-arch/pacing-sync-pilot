@@ -581,14 +581,60 @@ export default function AnnouncementCenterPage() {
               <Select value={formType} onValueChange={setFormType}>
                 <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="test_reminder">Test Reminder</SelectItem>
-                  <SelectItem value="general">General</SelectItem>
-                  <SelectItem value="homework">Homework</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                  <SelectItem value="weekly_summary">Weekly Summary</SelectItem>
+                  <SelectItem value="math_early">Math Test — Early Reminder</SelectItem>
+                  <SelectItem value="math_2day">Math Test — 2-Day Reminder</SelectItem>
+                  <SelectItem value="spelling_test">Spelling Test Reminder</SelectItem>
+                  <SelectItem value="reading_test">Reading Test Reminder</SelectItem>
+                  <SelectItem value="combined">Reading + Spelling Combined</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {formType !== 'custom' && (
+              <div className="grid grid-cols-2 gap-3 items-end">
+                {(formType === 'math_early' || formType === 'math_2day') && (
+                  <div>
+                    <Label className="text-xs">Test Number</Label>
+                    <Input
+                      type="number"
+                      placeholder="e.g. 15"
+                      value={tplTestNum}
+                      onChange={(e) => setTplTestNum(e.target.value)}
+                    />
+                  </div>
+                )}
+                {(formType === 'spelling_test' || formType === 'reading_test' || formType === 'combined') && (
+                  <div>
+                    <Label className="text-xs">Lesson / Test Number</Label>
+                    <Input
+                      type="number"
+                      placeholder="e.g. 12"
+                      value={tplLessonNum}
+                      onChange={(e) => setTplLessonNum(e.target.value)}
+                    />
+                  </div>
+                )}
+                {formType === 'weekly_summary' && (
+                  <div>
+                    <Label className="text-xs">Subject</Label>
+                    <Select value={tplSummarySubject} onValueChange={setTplSummarySubject}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <Button size="sm" variant="secondary" onClick={handleGenerateDraft}>
+                  Generate Draft
+                </Button>
+              </div>
+            )}
+
             <Input placeholder="Title" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} />
-            <Textarea placeholder="Message body..." value={formContent} onChange={(e) => setFormContent(e.target.value)} rows={3} />
+            <Textarea placeholder="Message body..." value={formContent} onChange={(e) => setFormContent(e.target.value)} rows={6} />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleCreate}>Create</Button>
               <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
