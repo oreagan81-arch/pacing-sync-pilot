@@ -110,7 +110,10 @@ export default function AnnouncementCenterPage() {
   const [formSubject, setFormSubject] = useState('');
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
-  const [formType, setFormType] = useState('test_reminder');
+  const [formType, setFormType] = useState('custom');
+  const [tplTestNum, setTplTestNum] = useState('');
+  const [tplLessonNum, setTplLessonNum] = useState('');
+  const [tplSummarySubject, setTplSummarySubject] = useState('Math');
 
   // Reading Mastery quick-create dialog
   const [showRM, setShowRM] = useState(false);
