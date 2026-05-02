@@ -332,10 +332,93 @@ export default function AnnouncementCenterPage() {
   // ──────────────────────────────────────────────────────────────────────────
   // Manual create / delete / post (preserved)
   // ──────────────────────────────────────────────────────────────────────────
+  // Map a template type to its target course_id
+  const courseIdForType = (type: string): number | null => {
+    if (type === 'math_early' || type === 'math_2day') return 21957;
+    if (type === 'spelling_test' || type === 'reading_test' || type === 'combined') {
+      return TOGETHER_LOGIC_COURSE_ID;
+    }
+    if (type === 'weekly_summary') {
+      return config?.courseIds[tplSummarySubject] || null;
+    }
+    return config?.courseIds[formSubject] || null;
+  };
+
+  // Pick scheduled_post timestamp based on type
+  const scheduledForType = (type: string): string => {
+    if (type === 'math_early') return getNextFriday4PM();
+    if (type === 'math_2day') return getWednesdayBefore('Friday');
+    return getNextFriday4PM();
+  };
+
+  // Generate HTML/title from selected template
+  const handleGenerateDraft = () => {
+    if (!config) { toast.error('Config not loaded'); return; }
+    try {
+      if (formType === 'math_early' || formType === 'math_2day') {
+        const lesson = tplTestNum.trim();
+        if (!lesson) { toast.error('Test Number required'); return; }
+        const powerUp = config.powerUpMap[lesson] || '';
+        const args = {
+          lesson,
+          day: 'Friday',
+          powerUp,
+          factTest: `Fact Test ${lesson}`,
+          studyGuideUrl: '',
+        };
+        const html = formType === 'math_early' ? buildMathEarlyHtml(args) : buildMathUrgentHtml(args);
+        setFormTitle(formType === 'math_early'
+          ? `🔢 Heads Up: Math Test — Lesson ${lesson}`
+          : `⚠️ Math Test Lesson ${lesson} — 2 Days Out`);
+        setFormContent(html);
+        setFormSubject('Math');
+      } else if (formType === 'spelling_test') {
+        const n = parseInt(tplTestNum || tplLessonNum, 10);
+        if (!n) { toast.error('Test Number required'); return; }
+        const html = renderSpellingTestBody({
+          testNum: n,
+          wordBank: config.spellingWordBank || {},
+        });
+        setFormTitle(`📝 Spelling Test ${n} — Reminder`);
+        setFormContent(html);
+        setFormSubject('Spelling');
+      } else if (formType === 'reading_test') {
+        const lessonNum = tplLessonNum || tplTestNum;
+        if (!lessonNum) { toast.error('Lesson / Test Number required'); return; }
+        const html = renderReadingTestBody({
+          lessonNum,
+          readingTestPhrases: config.autoLogic?.readingTestPhrases || [],
+        });
+        setFormTitle(`📚 Reading Mastery Test ${lessonNum} — Reminder`);
+        setFormContent(html);
+        setFormSubject('Reading');
+      } else if (formType === 'combined') {
+        const lessonNum = tplLessonNum || tplTestNum;
+        const sNum = parseInt(tplTestNum || tplLessonNum, 10);
+        const html = renderCombinedReadingSpellingBody({
+          reading: lessonNum
+            ? { lessonNum, readingTestPhrases: config.autoLogic?.readingTestPhrases || [] }
+            : undefined,
+          spelling: sNum ? { testNum: sNum, wordBank: config.spellingWordBank || {} } : undefined,
+        });
+        setFormTitle(`📚 Reading & Spelling — Combined Reminder`);
+        setFormContent(html);
+        setFormSubject('Reading');
+      } else if (formType === 'weekly_summary') {
+        setFormTitle(`📅 ${tplSummarySubject} — Weekly Overview`);
+        setFormContent(`<p>Here is what we are covering in <strong>${tplSummarySubject}</strong> this week.</p>`);
+        setFormSubject(tplSummarySubject);
+      }
+      toast.success('Draft generated — review and Create');
+    } catch (e: any) {
+      toast.error('Generate failed', { description: e.message });
+    }
+  };
+
   const handleCreate = async () => {
     if (!formTitle || !formSubject) { toast.error('Title and subject required'); return; }
     try {
-      const courseId = config?.courseIds[formSubject];
+      const courseId = courseIdForType(formType);
       const { error } = await supabase.from('announcements').insert({
         week_id: selectedWeekId || null,
         subject: formSubject,
@@ -343,13 +426,14 @@ export default function AnnouncementCenterPage() {
         content: formContent,
         type: formType,
         status: 'DRAFT',
-        course_id: courseId || null,
-        scheduled_post: getNextFriday4PM(),
+        course_id: courseId,
+        scheduled_post: scheduledForType(formType),
       });
       if (error) throw error;
       toast.success('Announcement created');
       setShowForm(false);
       setFormTitle(''); setFormContent(''); setFormSubject('');
+      setTplTestNum(''); setTplLessonNum('');
       loadAnnouncements(selectedWeekId || undefined);
     } catch (e: any) {
       toast.error('Create failed', { description: e.message });
