@@ -48,9 +48,15 @@ interface AssignmentGroupMapping {
 
 const ASSIGNMENT_GROUPS: Record<string, AssignmentGroupMapping> = {
   "Math Tests": {
-    group_name: "Assessments",
+    group_name: "Written Assessments",
     points: 100,
     grading_type: "points",
+  },
+  "Math Fact Test": {
+    group_name: "Fact Assessments",
+    points: 100,
+    grading_type: "points",
+    omit_from_final: false,
   },
   "Math Homework": {
     group_name: "Homework/Class Work",
@@ -59,7 +65,7 @@ const ASSIGNMENT_GROUPS: Record<string, AssignmentGroupMapping> = {
   },
   "Math Study Guide": {
     group_name: "Homework/Class Work",
-    points: 100,
+    points: 0,
     grading_type: "pass_fail",
     omit_from_final: true,
   },
