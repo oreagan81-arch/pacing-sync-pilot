@@ -6,6 +6,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ConfigContext, loadConfig, type AppConfig } from '@/lib/config';
 import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useSystemStore } from '@/store/useSystemStore';
 
 import DashboardPage from '@/pages/DashboardPage';
 import PacingEntryPage from '@/pages/PacingEntryPage';
