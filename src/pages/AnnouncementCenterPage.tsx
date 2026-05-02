@@ -16,6 +16,11 @@ import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 import { expandSpellingTest } from '@/lib/together-logic';
 import { TOGETHER_LOGIC_COURSE_ID, getCourseId } from '@/lib/course-ids';
 import { logEdit, learnFromEdit, logDeployHabit } from '@/lib/teacher-memory';
+import {
+  renderReadingTestBody,
+  renderSpellingTestBody,
+  renderCombinedReadingSpellingBody,
+} from '@/lib/announcement-templates';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
