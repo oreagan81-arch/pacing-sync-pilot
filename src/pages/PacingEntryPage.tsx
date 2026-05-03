@@ -495,6 +495,11 @@ export default function PacingEntryPage({
           {sheetLoading ? 'Importing...' : 'Google Sheets'}
         </Button>
 
+        <Button variant="outline" size="sm" onClick={handleGasImport} disabled={gasImporting} className="gap-1.5">
+          {gasImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span aria-hidden>🔄</span>}
+          {gasImporting ? 'Importing...' : 'Import from GAS Sheet'}
+        </Button>
+
         <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">
           <Zap className="h-3.5 w-3.5" />
           Auto-Remind
