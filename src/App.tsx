@@ -56,6 +56,16 @@ function AppContent({ config }: { config: AppConfig }) {
         setBootLoading(false);
       };
       try {
+        // 0) Prefer the explicitly active week
+        const { data: activeRow } = await supabase
+          .from('weeks')
+          .select('quarter, week_num')
+          .eq('is_active', true)
+          .maybeSingle();
+        if (activeRow) {
+          apply((activeRow as any).quarter, (activeRow as any).week_num);
+          return;
+        }
         // 1) Try to find a week whose date_range covers today
         const { data: allWeeks } = await supabase
           .from('weeks')

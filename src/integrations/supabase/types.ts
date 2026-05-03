@@ -753,6 +753,7 @@ export type Database = {
           created_at: string | null
           date_range: string | null
           id: string
+          is_active: boolean
           page_hashes: Json
           quarter: string
           reminders: string | null
@@ -765,6 +766,7 @@ export type Database = {
           created_at?: string | null
           date_range?: string | null
           id?: string
+          is_active?: boolean
           page_hashes?: Json
           quarter: string
           reminders?: string | null
@@ -777,6 +779,7 @@ export type Database = {
           created_at?: string | null
           date_range?: string | null
           id?: string
+          is_active?: boolean
           page_hashes?: Json
           quarter?: string
           reminders?: string | null

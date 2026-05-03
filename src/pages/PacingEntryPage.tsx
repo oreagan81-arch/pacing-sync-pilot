@@ -217,6 +217,10 @@ export default function PacingEntryPage({
 
       if (rowsErr) throw new Error(rowsErr.message);
 
+      // Mark this week as the active one (clear others first to satisfy unique index)
+      await supabase.from('weeks').update({ is_active: false }).neq('id', weekRow.id);
+      await supabase.from('weeks').update({ is_active: true }).eq('id', weekRow.id);
+
       toast.success('Week saved!');
       // Refresh saved weeks list
       const { data: updated } = await supabase
@@ -242,6 +246,10 @@ export default function PacingEntryPage({
       supabase.from('weeks').select('*').eq('id', weekId).single(),
       supabase.from('pacing_rows').select('*').eq('week_id', weekId),
     ]);
+
+    // Mark loaded week as active
+    await supabase.from('weeks').update({ is_active: false }).neq('id', weekId);
+    await supabase.from('weeks').update({ is_active: true }).eq('id', weekId);
 
     if (weekData2) {
       setDateRange(weekData2.date_range || '');
