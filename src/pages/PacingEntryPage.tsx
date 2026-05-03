@@ -316,6 +316,32 @@ export default function PacingEntryPage({
     }
   };
 
+  const handleGasImport = async () => {
+    setGasImporting(true);
+    try {
+      await fetchPacingData(activeQuarter, activeWeek);
+      const pacing = useSystemStore.getState().pacingData;
+      if (!pacing || !pacing.subjects) {
+        toast.error('GAS pull returned no data');
+        return;
+      }
+      const result = await upsertPacingFromGAS(activeQuarter, activeWeek, pacing);
+      toast.success(`Imported ${result.rowsUpserted} rows from GAS pacing sheet`);
+      // Refresh saved weeks list, then reload form from Supabase
+      const { data: updated } = await supabase
+        .from('weeks')
+        .select('id, quarter, week_num')
+        .order('quarter')
+        .order('week_num');
+      if (updated) setSavedWeeks(updated);
+      await loadWeekById(result.weekId, false);
+    } catch (e: any) {
+      toast.error('GAS import failed', { description: e?.message });
+    } finally {
+      setGasImporting(false);
+    }
+  };
+
   const handleSheetImport = async () => {
     setSheetLoading(true);
     try {
