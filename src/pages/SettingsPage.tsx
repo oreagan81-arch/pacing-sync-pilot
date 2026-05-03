@@ -26,6 +26,23 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Spelling Word Bank</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Word bank has{' '}
+            <span className="font-semibold text-foreground">
+              {Object.values(config?.spellingWordBank ?? {}).filter(
+                (list) => Array.isArray(list) && list.length > 0
+              ).length}
+            </span>{' '}
+            of 24 lists populated
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">App Info</CardTitle>
         </CardHeader>
         <CardContent>
