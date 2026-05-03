@@ -53,7 +53,11 @@ Deno.serve(async (req) => {
       nextWeek = weeks?.find((w) => w.id === targetWeekId);
     } else {
       // assume "current" is the most recently updated week
-      const { data: cur } = await sb.from('weeks').select('id').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      let { data: cur } = await sb.from('weeks').select('id').eq('is_active', true).maybeSingle();
+      if (!cur?.id) {
+        const fb = await sb.from('weeks').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+        cur = fb.data ?? null;
+      }
       nextWeek = getNextWeek(weeks ?? [], cur?.id);
     }
     if (!nextWeek) throw new Error('No next week found');
