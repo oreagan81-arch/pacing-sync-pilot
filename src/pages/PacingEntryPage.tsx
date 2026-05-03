@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { evaluateWeekRisk } from '@/lib/risk-engine';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import { useSystemStore } from '@/store/useSystemStore';
+import { upsertPacingFromGAS } from '@/lib/gas-import';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
@@ -98,6 +100,8 @@ export default function PacingEntryPage({
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
   const [syncingResources, setSyncingResources] = useState(false);
+  const [gasImporting, setGasImporting] = useState(false);
+  const fetchPacingData = useSystemStore((s) => s.fetchPacingData);
 
   // Load content_map for resource badges
   const loadContentMap = useCallback(async () => {
@@ -312,6 +316,58 @@ export default function PacingEntryPage({
     }
   };
 
+  const handleGasImport = async () => {
+    setGasImporting(true);
+    try {
+      await fetchPacingData(activeQuarter, activeWeek);
+      const pacing = useSystemStore.getState().pacingData;
+      if (!pacing || !pacing.subjects) {
+        toast.error('GAS pull returned no data');
+        return;
+      }
+      const result = await upsertPacingFromGAS(activeQuarter, activeWeek, pacing);
+      toast.success(`Imported ${result.rowsUpserted} rows from GAS pacing sheet`);
+      // Refresh saved weeks list
+      const { data: updated } = await supabase
+        .from('weeks')
+        .select('id, quarter, week_num')
+        .order('quarter')
+        .order('week_num');
+      if (updated) setSavedWeeks(updated);
+      // Reload form data directly from Supabase for the imported week
+      const [{ data: weekRow2 }, { data: rows }] = await Promise.all([
+        supabase.from('weeks').select('*').eq('id', result.weekId).single(),
+        supabase.from('pacing_rows').select('*').eq('week_id', result.weekId),
+      ]);
+      if (weekRow2) {
+        setDateRange((weekRow2 as any).date_range || '');
+        setReminders((weekRow2 as any).reminders || '');
+        setResources((weekRow2 as any).resources || '');
+      }
+      if (rows) {
+        const newData = initWeekData();
+        for (const row of rows) {
+          if (newData[row.subject]?.[row.day]) {
+            newData[row.subject][row.day] = {
+              type: row.type || '',
+              lesson_num: row.lesson_num || '',
+              in_class: row.in_class || '',
+              at_home: row.at_home || '',
+              resources: row.resources || '',
+              create_assign: row.create_assign ?? true,
+              hint_override: ((row as any).hint_override ?? null) as DayData['hint_override'],
+            };
+          }
+        }
+        setWeekData(newData);
+      }
+    } catch (e: any) {
+      toast.error('GAS import failed', { description: e?.message });
+    } finally {
+      setGasImporting(false);
+    }
+  };
+
   const handleSheetImport = async () => {
     setSheetLoading(true);
     try {
@@ -437,6 +493,11 @@ export default function PacingEntryPage({
         <Button variant="outline" size="sm" onClick={handleSheetImport} disabled={sheetLoading} className="gap-1.5">
           {sheetLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sheet className="h-3.5 w-3.5" />}
           {sheetLoading ? 'Importing...' : 'Google Sheets'}
+        </Button>
+
+        <Button variant="outline" size="sm" onClick={handleGasImport} disabled={gasImporting} className="gap-1.5">
+          {gasImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span aria-hidden>🔄</span>}
+          {gasImporting ? 'Importing...' : 'Import from GAS Sheet'}
         </Button>
 
         <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { upsertPacingFromGAS } from '@/lib/gas-import';
 
 export type HintOverride = 'evens' | 'odds' | 'none' | null;
 
@@ -122,7 +123,14 @@ export const useSystemStore = create<SystemState>((set, get) => ({
         });
       }
 
-      set({ pacingData: { dates, subjects }, isLoading: false });
+      const pacing: PacingData = { dates, subjects };
+      set({ pacingData: pacing, isLoading: false });
+      // Persist to Supabase (best-effort; do not surface errors here)
+      try {
+        await upsertPacingFromGAS(month, week, pacing);
+      } catch (e) {
+        console.warn('upsertPacingFromGAS failed', e);
+      }
     } catch {
       set({ pacingData: null, isLoading: false });
     }
