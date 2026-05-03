@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { evaluateWeekRisk } from '@/lib/risk-engine';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import { useSystemStore } from '@/store/useSystemStore';
+import { upsertPacingFromGAS } from '@/lib/gas-import';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
