@@ -247,6 +247,10 @@ export default function PacingEntryPage({
       supabase.from('pacing_rows').select('*').eq('week_id', weekId),
     ]);
 
+    // Mark loaded week as active
+    await supabase.from('weeks').update({ is_active: false }).neq('id', weekId);
+    await supabase.from('weeks').update({ is_active: true }).eq('id', weekId);
+
     if (weekData2) {
       setDateRange(weekData2.date_range || '');
       setReminders(weekData2.reminders || '');
