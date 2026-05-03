@@ -327,14 +327,40 @@ export default function PacingEntryPage({
       }
       const result = await upsertPacingFromGAS(activeQuarter, activeWeek, pacing);
       toast.success(`Imported ${result.rowsUpserted} rows from GAS pacing sheet`);
-      // Refresh saved weeks list, then reload form from Supabase
+      // Refresh saved weeks list
       const { data: updated } = await supabase
         .from('weeks')
         .select('id, quarter, week_num')
         .order('quarter')
         .order('week_num');
       if (updated) setSavedWeeks(updated);
-      await loadWeekById(result.weekId, false);
+      // Reload form data directly from Supabase for the imported week
+      const [{ data: weekRow2 }, { data: rows }] = await Promise.all([
+        supabase.from('weeks').select('*').eq('id', result.weekId).single(),
+        supabase.from('pacing_rows').select('*').eq('week_id', result.weekId),
+      ]);
+      if (weekRow2) {
+        setDateRange((weekRow2 as any).date_range || '');
+        setReminders((weekRow2 as any).reminders || '');
+        setResources((weekRow2 as any).resources || '');
+      }
+      if (rows) {
+        const newData = initWeekData();
+        for (const row of rows) {
+          if (newData[row.subject]?.[row.day]) {
+            newData[row.subject][row.day] = {
+              type: row.type || '',
+              lesson_num: row.lesson_num || '',
+              in_class: row.in_class || '',
+              at_home: row.at_home || '',
+              resources: row.resources || '',
+              create_assign: row.create_assign ?? true,
+              hint_override: ((row as any).hint_override ?? null) as DayData['hint_override'],
+            };
+          }
+        }
+        setWeekData(newData);
+      }
     } catch (e: any) {
       toast.error('GAS import failed', { description: e?.message });
     } finally {
