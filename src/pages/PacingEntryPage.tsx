@@ -100,6 +100,8 @@ export default function PacingEntryPage({
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
   const [syncingResources, setSyncingResources] = useState(false);
+  const [gasImporting, setGasImporting] = useState(false);
+  const fetchPacingData = useSystemStore((s) => s.fetchPacingData);
 
   // Load content_map for resource badges
   const loadContentMap = useCallback(async () => {
