@@ -23,19 +23,17 @@ export function generateAssignmentTitle(
 
   switch (subject) {
     case 'Math':
-      if (type === 'Test') return `${prefix} Test \u2014 Lesson ${num}`;
-      if (type === 'Fact Test') return `${prefix} Fact Test ${num}`;
-      if (type === 'Study Guide') return `${prefix} Study Guide \u2014 Lesson ${num}`;
-      // Investigations: no homework assignment is generated. Title returned for display only.
-      // Study Guide ride-along (when Investigation is day-before-Test) is handled by the
-      // existing Math Triple Logic in assignment-build.ts, which is keyed off the Test row.
-      if (type === 'Investigation') return `${prefix} Investigation ${num}`;
-      // Parity suffix: respect override first, else derive from lesson number.
-      if (hintOverride === 'none') return `${prefix} HW \u2014 Lesson ${num}`;
-      if (hintOverride === 'evens') return `${prefix} Evens HW \u2014 Lesson ${num}`;
-      if (hintOverride === 'odds') return `${prefix} Odds HW \u2014 Lesson ${num}`;
-      if (num && parseInt(num) % 2 === 0) return `${prefix} Evens HW \u2014 Lesson ${num}`;
-      return `${prefix} Odds HW \u2014 Lesson ${num}`;
+      // Canonical 2025-2026 Math title formats:
+      //   SM5: Lesson N Evens / Odds / Test / Fact Test / Study Guide / Investigation
+      if (type === 'Test') return `${prefix} Lesson ${num} Test`;
+      if (type === 'Fact Test') return `${prefix} Lesson ${num} Fact Test`;
+      if (type === 'Study Guide') return `${prefix} Lesson ${num} Study Guide`;
+      if (type === 'Investigation') return `${prefix} Lesson ${num} Investigation`;
+      if (hintOverride === 'none') return `${prefix} Lesson ${num}`;
+      if (hintOverride === 'evens') return `${prefix} Lesson ${num} Evens`;
+      if (hintOverride === 'odds') return `${prefix} Lesson ${num} Odds`;
+      if (num && parseInt(num) % 2 === 0) return `${prefix} Lesson ${num} Evens`;
+      return `${prefix} Lesson ${num} Odds`;
 
     case 'Reading':
       if (type === 'Test') return `${prefix} Mastery Test ${num}`;
