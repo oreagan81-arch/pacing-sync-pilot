@@ -79,15 +79,30 @@ export interface ValidationResult {
   hasWarnings: boolean;
 }
 
+/** Page-only courses — these MUST NEVER receive assignments. */
+const PAGE_ONLY_COURSES = new Set<number>([21934, 21970]);
+
+/** Simplified result shape used by callers that only need pass/fail. */
+export interface SimpleValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
 const LESSON_REF_PATTERN = /\b(?:L|SG|Lesson\s+|Test\s+|Fact Test\s+)\d+\b/gi;
 
 /**
  * Run all 6 pre-deploy checks. Returns results + aggregate flags.
  * NOTE: Checks are advisory by default — `fail` should disable approve button,
  * `warn` should require explicit acknowledgement.
+ *
+ * HARD BLOCK: any assignment routed to a page-only course (History 21934 /
+ * Science 21970) is unconditionally rejected before the 6 checks run.
  */
 export function validateDeployment(input: ValidatorInput): ValidationResult {
+  const hardBlock = checkPageOnlyCourses(input.assignments);
   const checks: ValidationCheck[] = [
+    ...(hardBlock ? [hardBlock] : []),
     checkMissingFiles(input.assignments, input.contentMap),
     checkFridayViolations(input.assignments),
     checkDuplicates(input.assignments),
@@ -100,6 +115,44 @@ export function validateDeployment(input: ValidatorInput): ValidationResult {
     checks,
     hasFailures: checks.some((c) => c.level === 'fail'),
     hasWarnings: checks.some((c) => c.level === 'warn'),
+  };
+}
+
+/**
+ * Convenience wrapper returning the simplified `{ valid, errors, warnings }`
+ * shape required by the deployment gate. Any failing check blocks deploy.
+ */
+export function validate(input: ValidatorInput): SimpleValidationResult {
+  const { checks } = validateDeployment(input);
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  for (const c of checks) {
+    if (c.level === 'fail') {
+      errors.push(`${c.label}: ${c.detail}`);
+      if (c.items) errors.push(...c.items.map((i) => `  - ${i}`));
+    } else if (c.level === 'warn') {
+      warnings.push(`${c.label}: ${c.detail}`);
+      if (c.items) warnings.push(...c.items.map((i) => `  - ${i}`));
+    }
+  }
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
+ * 0. HARD BLOCK — History (21934) and Science (21970) are page-only courses.
+ * Any assignment object routed to these courses is an immediate fail.
+ */
+function checkPageOnlyCourses(assignments: BuiltAssignment[]): ValidationCheck | null {
+  const offenders = assignments.filter(
+    (a) => !a.skipReason && PAGE_ONLY_COURSES.has(a.courseId),
+  );
+  if (offenders.length === 0) return null;
+  return {
+    id: 'page-only-courses',
+    label: 'Page-only course violation',
+    level: 'fail',
+    detail: `${offenders.length} assignment(s) routed to History/Science (page-only courses).`,
+    items: offenders.map((a) => `${a.subject} → course ${a.courseId}: ${a.title}`),
   };
 }
 
