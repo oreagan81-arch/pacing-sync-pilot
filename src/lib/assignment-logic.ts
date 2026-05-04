@@ -23,19 +23,17 @@ export function generateAssignmentTitle(
 
   switch (subject) {
     case 'Math':
-      if (type === 'Test') return `${prefix} Test \u2014 Lesson ${num}`;
-      if (type === 'Fact Test') return `${prefix} Fact Test ${num}`;
-      if (type === 'Study Guide') return `${prefix} Study Guide \u2014 Lesson ${num}`;
-      // Investigations: no homework assignment is generated. Title returned for display only.
-      // Study Guide ride-along (when Investigation is day-before-Test) is handled by the
-      // existing Math Triple Logic in assignment-build.ts, which is keyed off the Test row.
-      if (type === 'Investigation') return `${prefix} Investigation ${num}`;
-      // Parity suffix: respect override first, else derive from lesson number.
-      if (hintOverride === 'none') return `${prefix} HW \u2014 Lesson ${num}`;
-      if (hintOverride === 'evens') return `${prefix} Evens HW \u2014 Lesson ${num}`;
-      if (hintOverride === 'odds') return `${prefix} Odds HW \u2014 Lesson ${num}`;
-      if (num && parseInt(num) % 2 === 0) return `${prefix} Evens HW \u2014 Lesson ${num}`;
-      return `${prefix} Odds HW \u2014 Lesson ${num}`;
+      // Canonical 2025-2026 Math title formats:
+      //   SM5: Lesson N Evens / Odds / Test / Fact Test / Study Guide / Investigation
+      if (type === 'Test') return `${prefix} Lesson ${num} Test`;
+      if (type === 'Fact Test') return `${prefix} Lesson ${num} Fact Test`;
+      if (type === 'Study Guide') return `${prefix} Lesson ${num} Study Guide`;
+      if (type === 'Investigation') return `${prefix} Lesson ${num} Investigation`;
+      if (hintOverride === 'none') return `${prefix} Lesson ${num}`;
+      if (hintOverride === 'evens') return `${prefix} Lesson ${num} Evens`;
+      if (hintOverride === 'odds') return `${prefix} Lesson ${num} Odds`;
+      if (num && parseInt(num) % 2 === 0) return `${prefix} Lesson ${num} Evens`;
+      return `${prefix} Lesson ${num} Odds`;
 
     case 'Reading':
       if (type === 'Test') return `${prefix} Mastery Test ${num}`;
@@ -141,3 +139,110 @@ export function isInvestigationBeforeTest(
     (r) => r.subject === 'Math' && r.day === nextDay && (r.type ?? '').toLowerCase() === 'test',
   );
 }
+
+// ============================================================================
+// CANONICAL CANVAS ASSIGNMENT PAYLOAD BUILDER
+// Enforces 2025-2026 universal rules:
+//   • submission_types = ['on_paper']
+//   • grading_type = 'points' (default) | 'pass_fail' (when title contains "Study Guide")
+//   • due_at = 11:59 PM Eastern Time on the assignment's date
+// ============================================================================
+
+export interface CanvasAssignmentPayload {
+  name: string;
+  description: string;
+  points_possible: number;
+  grading_type: 'points' | 'pass_fail';
+  submission_types: ['on_paper'];
+  due_at: string; // ISO 8601 with ET offset
+  assignment_group_name: string;
+  omit_from_final_grade: boolean;
+  published: boolean;
+}
+
+export interface BuildAssignmentInput {
+  subject: string;
+  type: string;
+  lessonNum: string | null;
+  prefix: string;          // e.g. "SM5:", "RM4:", "ELA4A:"
+  /** ISO date "YYYY-MM-DD" for the day this assignment is due */
+  date: string;
+  description?: string;
+  hintOverride?: HintOverride;
+}
+
+/**
+ * Convert a YYYY-MM-DD date into an ISO timestamp for 11:59 PM Eastern Time.
+ * Honors EST (UTC-5) vs EDT (UTC-4) using a simple US DST window
+ * (2nd Sun Mar → 1st Sun Nov), which is sufficient for K-12 scheduling.
+ */
+export function dueAt1159ET(dateYmd: string): string {
+  const [y, m, d] = dateYmd.split('-').map(Number);
+  // Compute whether this date falls inside US DST.
+  const isDST = (() => {
+    const dstStart = nthSundayOfMonth(y, 3, 2); // 2nd Sunday of March
+    const dstEnd = nthSundayOfMonth(y, 11, 1);  // 1st Sunday of November
+    const ymd = y * 10000 + m * 100 + d;
+    const startYmd = y * 10000 + 3 * 100 + dstStart;
+    const endYmd = y * 10000 + 11 * 100 + dstEnd;
+    return ymd >= startYmd && ymd < endYmd;
+  })();
+  const offset = isDST ? '-04:00' : '-05:00';
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  return `${y}-${mm}-${dd}T23:59:00${offset}`;
+}
+
+function nthSundayOfMonth(year: number, month: number, n: number): number {
+  // month is 1-12
+  const firstDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const firstSunday = ((7 - firstDow) % 7) + 1;
+  return firstSunday + (n - 1) * 7;
+}
+
+/**
+ * Build a single Canvas assignment payload with universal rules enforced.
+ */
+export function buildAssignmentPayload(input: BuildAssignmentInput): CanvasAssignmentPayload {
+  const { subject, type, lessonNum, prefix, date, description = '', hintOverride } = input;
+  const name = generateAssignmentTitle(subject, type, lessonNum, prefix, hintOverride);
+  const group = resolveAssignmentGroup(subject, type);
+
+  // Universal grading_type rule: any title containing "Study Guide" is pass_fail.
+  const isStudyGuide = /study\s*guide/i.test(name);
+  const grading_type: 'points' | 'pass_fail' = isStudyGuide ? 'pass_fail' : 'points';
+
+  return {
+    name,
+    description,
+    points_possible: isStudyGuide ? 0 : group.points,
+    grading_type,
+    submission_types: ['on_paper'],
+    due_at: dueAt1159ET(date),
+    assignment_group_name: group.groupName,
+    omit_from_final_grade: isStudyGuide ? true : group.omitFromFinal,
+    published: true,
+  };
+}
+
+/**
+ * Build the deploy array for a single pacing row, applying Synthetic Sibling
+ * logic for Math Tests:
+ *   1. Math Test (points, 100 pts)
+ *   2. Math Fact Test (points, 100 pts) — same date
+ *   3. Math Study Guide (pass_fail, 0 pts, omit_from_final) — same date
+ *
+ * Non-Math-Test rows return a single-element array.
+ */
+export function buildAssignmentBatch(input: BuildAssignmentInput): CanvasAssignmentPayload[] {
+  const primary = buildAssignmentPayload(input);
+
+  if (input.subject === 'Math' && input.type === 'Test') {
+    const factTest = buildAssignmentPayload({ ...input, type: 'Fact Test' });
+    const studyGuide = buildAssignmentPayload({ ...input, type: 'Study Guide' });
+    return [primary, factTest, studyGuide];
+  }
+
+  return [primary];
+}
+
