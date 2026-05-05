@@ -90,11 +90,8 @@ export default function PageBuilderPage() {
 
   useEffect(() => {
     if (selectedWeekId || weeks.length === 0) return;
-    const matchingWeek = weeks.find((week) => week.quarter === selectedMonth && week.week_num === storeWeek);
-    if (matchingWeek) {
-      setSelectedWeekId(matchingWeek.id);
-    }
-  }, [weeks, selectedWeekId, selectedMonth, storeWeek]);
+    setSelectedWeekId(weeks[0].id);
+  }, [weeks, selectedWeekId]);
 
   useEffect(() => {
     if (!selectedWeekId) return;

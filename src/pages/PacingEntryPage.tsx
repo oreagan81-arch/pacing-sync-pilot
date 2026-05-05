@@ -287,6 +287,7 @@ export default function PacingEntryPage({
   }, [savedWeeks, setActiveQuarter, setActiveWeek]);
 
   useEffect(() => {
+    if (savedWeeks.length === 0) return; // Don't reset while still loading
     const matchingWeek = savedWeeks.find((week) => week.quarter === activeQuarter && week.week_num === activeWeek);
     if (matchingWeek) {
       void loadWeekById(matchingWeek.id, false);
