@@ -496,6 +496,17 @@ export default function PacingEntryPage({
           {sheetLoading ? 'Importing...' : 'Google Sheets'}
         </Button>
 
+        <FullSheetImportDialog
+          onImported={async () => {
+            const { data: updated } = await supabase
+              .from('weeks')
+              .select('id, quarter, week_num')
+              .order('quarter')
+              .order('week_num');
+            if (updated) setSavedWeeks(updated);
+          }}
+        />
+
         <Button variant="outline" size="sm" onClick={handleGasImport} disabled={gasImporting} className="gap-1.5">
           {gasImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span aria-hidden>🔄</span>}
           {gasImporting ? 'Importing...' : 'Import from GAS Sheet'}
