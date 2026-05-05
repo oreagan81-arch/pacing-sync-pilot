@@ -14,6 +14,7 @@ import { evaluateWeekRisk } from '@/lib/risk-engine';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { useSystemStore } from '@/store/useSystemStore';
 import { upsertPacingFromGAS } from '@/lib/gas-import';
+import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImportDialog';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
@@ -494,6 +495,17 @@ export default function PacingEntryPage({
           {sheetLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sheet className="h-3.5 w-3.5" />}
           {sheetLoading ? 'Importing...' : 'Google Sheets'}
         </Button>
+
+        <FullSheetImportDialog
+          onImported={async () => {
+            const { data: updated } = await supabase
+              .from('weeks')
+              .select('id, quarter, week_num')
+              .order('quarter')
+              .order('week_num');
+            if (updated) setSavedWeeks(updated);
+          }}
+        />
 
         <Button variant="outline" size="sm" onClick={handleGasImport} disabled={gasImporting} className="gap-1.5">
           {gasImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <span aria-hidden>🔄</span>}
