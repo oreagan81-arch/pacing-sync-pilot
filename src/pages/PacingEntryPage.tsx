@@ -14,6 +14,7 @@ import { evaluateWeekRisk } from '@/lib/risk-engine';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { useSystemStore } from '@/store/useSystemStore';
 import { upsertPacingFromGAS } from '@/lib/gas-import';
+import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImportDialog';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
