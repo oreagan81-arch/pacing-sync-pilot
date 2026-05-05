@@ -1,126 +1,127 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+// Edge function: sheets-import
+// Fetches the Thales pacing Google Sheet as CSV and returns raw rows.
+// The sheet is "Anyone with link can view" so no auth is required.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SPREADSHEET_ID = "1RpMrcQqqrDl2Gaqo2LaGTDQWvrsYwBntbYOXlIrM7LA";
+const DEFAULT_GID = "287822418";
 
-// NOTE: Legacy hardcoded MONTH_ROW_MAP has been removed. Date->row mapping is
-// now scanned dynamically from Column A of the Google Sheet (one time) and
-// cached in the public.content_map_registry table for subsequent imports.
+/**
+ * Minimal CSV parser that handles quoted fields, escaped quotes ("") and
+ * embedded newlines inside quotes. Returns string[][].
+ */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
 
-async function fetchFromAppsScript(params: Record<string, string>) {
-  const APPS_SCRIPT_URL = Deno.env.get("GOOGLE_APPS_SCRIPT_URL");
-  if (!APPS_SCRIPT_URL) throw new Error("GOOGLE_APPS_SCRIPT_URL not configured");
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
 
-  const url = new URL(APPS_SCRIPT_URL);
-  for (const [k, v] of Object.entries(params)) {
-    if (v != null && v !== "") url.searchParams.set(k, v);
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+      continue;
+    }
+
+    if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      // Handle CRLF: skip the \n after \r
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += c;
+    }
   }
 
-  const res = await fetch(url.toString(), { method: "GET", redirect: "follow" });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Google Apps Script error [${res.status}]: ${errText}`);
-  }
-  return await res.json();
-}
-
-async function scanAndCacheDateRows(sb: ReturnType<typeof createClient>, sheetName?: string) {
-  // Ask GAS for the full Column A scan (mode=scan returns [{date, row}, ...])
-  const raw = await fetchFromAppsScript({ mode: "scan", sheet: sheetName ?? "" });
-  const entries: Array<{ date: string; row: number }> = Array.isArray(raw?.dates)
-    ? raw.dates
-    : Array.isArray(raw)
-      ? raw
-      : [];
-
-  if (entries.length === 0) return {};
-
-  const upserts = entries
-    .filter((e) => e?.date && Number.isFinite(e?.row))
-    .map((e) => ({
-      date_string: String(e.date).trim(),
-      row_number: Number(e.row),
-      sheet_name: sheetName ?? null,
-      last_scanned: new Date().toISOString(),
-    }));
-
-  if (upserts.length > 0) {
-    const { error } = await sb
-      .from("content_map_registry")
-      .upsert(upserts, { onConflict: "date_string,sheet_name" });
-    if (error) console.error("registry upsert error:", error.message);
+  // Flush last field/row if non-empty
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
   }
 
-  const map: Record<string, number> = {};
-  for (const u of upserts) map[u.date_string] = u.row_number;
-  return map;
+  return rows;
 }
 
-async function getRowForDate(
-  sb: ReturnType<typeof createClient>,
-  dateString: string,
-  sheetName?: string,
-): Promise<number | null> {
-  // Try cache first
-  const { data } = await sb
-    .from("content_map_registry")
-    .select("row_number")
-    .eq("date_string", dateString)
-    .eq("sheet_name", sheetName ?? null)
-    .maybeSingle();
-  if (data?.row_number) return data.row_number as number;
-
-  // Cache miss → scan once and re-check
-  const map = await scanAndCacheDateRows(sb, sheetName);
-  return map[dateString] ?? null;
-}
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
-    const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const body = await req.json().catch(() => ({}));
-    const { weekNum, sheetName, dateString, mode } = body ?? {};
-
-    // Explicit rescan mode — refreshes the registry from Column A
-    if (mode === "rescan") {
-      const map = await scanAndCacheDateRows(sb, sheetName);
-      return new Response(JSON.stringify({ ok: true, count: Object.keys(map).length, map }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let gid: string = DEFAULT_GID;
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        if (body && typeof body.gid === "string" && body.gid.trim()) {
+          gid = body.gid.trim();
+        } else if (body && typeof body.gid === "number") {
+          gid = String(body.gid);
+        }
+      } catch {
+        // Empty body is fine — use default gid
+      }
     }
 
-    // Resolve start row dynamically from the registry when a date is given
-    let startRow: number | null = null;
-    if (dateString) {
-      startRow = await getRowForDate(sb, dateString, sheetName);
+    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${gid}`;
+    const upstream = await fetch(url, { redirect: "follow" });
+
+    if (!upstream.ok) {
+      const body = await upstream.text();
+      return new Response(
+        JSON.stringify({
+          error: "sheets_fetch_failed",
+          status: upstream.status,
+          url,
+          body: body.slice(0, 500),
+        }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const params: Record<string, string> = {};
-    if (weekNum) params.week = String(weekNum);
-    if (sheetName) params.sheet = sheetName;
-    if (startRow) params.startRow = String(startRow);
-    if (dateString) params.date = dateString;
+    const csv = await upstream.text();
+    const rows = parseCsv(csv);
 
-    console.log("Fetching from GAS with params:", params);
-    const rawData = await fetchFromAppsScript(params);
-
-    return new Response(JSON.stringify({ data: rawData, startRow }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (e) {
-    console.error("sheets-import error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ rows, gid, rowCount: rows.length }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(
+      JSON.stringify({ error: "internal_error", message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
