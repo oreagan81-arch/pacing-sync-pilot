@@ -60,7 +60,7 @@ export default function PageBuilderPage() {
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
-  const { selectedMonth, selectedWeek: storeWeek, pacingData, fetchPacingData } = useSystemStore();
+  const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
   const handleRealtimeEvent = useCallback((event: any) => {
     if (event.action === 'page_deploy' && event.subject) {
