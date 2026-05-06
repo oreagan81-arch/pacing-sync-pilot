@@ -76,6 +76,10 @@ export const useSystemStore = create<SystemState>((set, get) => ({
   },
 
   fetchPacingData: async (month: string, week: number) => {
+    if (!GAS_URL || GAS_URL.trim() === '') {
+      set({ isLoading: false });
+      return;
+    }
     set({ isLoading: true });
     try {
       const res = await fetch(`${GAS_URL}?month=${encodeURIComponent(month)}&week=${week}`, {
