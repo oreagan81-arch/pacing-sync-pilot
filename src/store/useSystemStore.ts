@@ -48,31 +48,14 @@ const API_SUBJECT_MAP: Record<string, string> = {
 };
 
 export const useSystemStore = create<SystemState>((set, get) => ({
-  selectedMonth: 'Q4',
-  selectedWeek: 2,
+  selectedMonth: '',
+  selectedWeek: 0,
   pacingData: null,
   isLoading: false,
   systemStatus: 'checking',
 
   setSelectedMonth: (m) => set({ selectedMonth: m }),
-  setSelectedWeek: (w) => {
-    // Stale-cache guard: the placeholder "Lesson 91" has historically leaked
-    // into rows when GAS returns a partial payload. If we detect it in the
-    // current cache, wipe and force a fresh fetch from Supabase/GAS.
-    const current = get().pacingData;
-    const hasStalePlaceholder =
-      !!current &&
-      Object.values(current.subjects || {}).some((cells) =>
-        (cells || []).some((c) => /lesson\s*91\b/i.test(c?.value ?? '')),
-      );
-    if (hasStalePlaceholder) {
-      get().clearCache();
-      const month = get().selectedMonth;
-      // Fire-and-forget refresh with the new week
-      void get().fetchPacingData(month, w);
-    }
-    set({ selectedWeek: w });
-  },
+  setSelectedWeek: (w) => set({ selectedWeek: w }),
   clearCache: () => set({ pacingData: null }),
   setPacingData: (d) => set({ pacingData: d }),
   setIsLoading: (l) => set({ isLoading: l }),
