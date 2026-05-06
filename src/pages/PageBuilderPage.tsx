@@ -20,6 +20,7 @@ import {
 } from '@/lib/together-logic';
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
+import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImportDialog';
 
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
