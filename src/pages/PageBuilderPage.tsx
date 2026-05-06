@@ -60,7 +60,7 @@ export default function PageBuilderPage() {
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
-  const { selectedMonth, selectedWeek: storeWeek, pacingData, fetchPacingData } = useSystemStore();
+  const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
   const handleRealtimeEvent = useCallback((event: any) => {
     if (event.action === 'page_deploy' && event.subject) {
@@ -89,18 +89,9 @@ export default function PageBuilderPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedWeekId || weeks.length === 0) return;
-    setSelectedWeekId(weeks[0].id);
-  }, [weeks, selectedWeekId]);
-
-  useEffect(() => {
     if (!selectedWeekId) return;
     const week = weeks.find((w) => w.id === selectedWeekId) || null;
     setSelectedWeek(week);
-
-    if (week) {
-      fetchPacingData(week.quarter, week.week_num);
-    }
 
     supabase
       .from('pacing_rows')
@@ -127,36 +118,9 @@ export default function PageBuilderPage() {
           setDeployStatuses(statuses);
         }
       });
-  }, [selectedWeekId, weeks, fetchPacingData]);
+  }, [selectedWeekId, weeks]);
 
-  const rows: CanvasPageRow[] = useMemo(() => {
-    if (!pacingData) return savedRows;
-
-    const savedRowMap = new Map(savedRows.map((row) => [`${row.subject}:${row.day}`, row]));
-    const result: CanvasPageRow[] = [];
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-    for (const [subject, cells] of Object.entries(pacingData.subjects)) {
-      cells.forEach((cell, idx) => {
-        const day = days[idx];
-        const savedRow = savedRowMap.get(`${subject}:${day}`);
-        result.push({
-          day,
-          type: savedRow?.type || (cell.isTest ? 'Test' : cell.isReview ? 'Review' : cell.isNoClass ? '-' : 'Lesson'),
-          lesson_num: cell.lessonNum || savedRow?.lesson_num || null,
-          in_class: cell.value || savedRow?.in_class || null,
-          at_home: savedRow?.at_home || null,
-          canvas_url: savedRow?.canvas_url || null,
-          canvas_assignment_id: savedRow?.canvas_assignment_id || null,
-          object_id: savedRow?.object_id || null,
-          subject,
-          resources: savedRow?.resources || null,
-        });
-      });
-    }
-
-    return result;
-  }, [pacingData, savedRows]);
+  const rows: CanvasPageRow[] = useMemo(() => savedRows, [savedRows]);
 
   // Get rows for active subject (Reading tab merges Reading + Spelling via Together Logic)
   const subjectRows = useMemo(() => {
