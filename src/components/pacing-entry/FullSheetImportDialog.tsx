@@ -174,11 +174,17 @@ export function FullSheetImportDialog({ onImported }: Props) {
     setImporting(true);
     let imported = 0;
     try {
+      const startingQ = parseInt(quarter.replace('Q', '')) || 1;
+      const resolveQuarter = (weekNum: number, startingQ: number): string => {
+        const qNum = Math.min(4, Math.ceil(weekNum / 9) + (startingQ - 1));
+        return `Q${Math.min(4, qNum)}`;
+      };
       for (const wk of picks) {
+        const wkQuarter = resolveQuarter(wk.weekNum, startingQ);
         const { data: weekRow, error: weekErr } = await supabase
           .from('weeks')
           .upsert(
-            { quarter, week_num: wk.weekNum, date_range: wk.dateRange || null } as any,
+            { quarter: wkQuarter, week_num: wk.weekNum, date_range: wk.dateRange || null } as any,
             { onConflict: 'quarter,week_num' },
           )
           .select('id')
