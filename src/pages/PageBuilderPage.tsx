@@ -378,6 +378,8 @@ export default function PageBuilderPage() {
           <span className="text-sm text-muted-foreground">{selectedWeek.date_range}</span>
         )}
 
+        <FullSheetImportDialog onImported={refreshWeeks} />
+
         <div className="ml-auto">
           <Button
             variant="deploy"
