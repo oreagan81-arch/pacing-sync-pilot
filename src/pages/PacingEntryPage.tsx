@@ -373,62 +373,104 @@ export default function PacingEntryPage({
   const handleSheetImport = async () => {
     setSheetLoading(true);
     try {
-      const { data: sheetData, error: sheetErr } = await supabase.functions.invoke('sheets-import', {
-        body: { weekNum: activeWeek },
+      const { data, error } = await supabase.functions.invoke('sheets-import', {
+        body: {},
       });
-      if (sheetErr) throw new Error(sheetErr.message);
-      if (sheetData?.error) throw new Error(sheetData.error);
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
 
-      const payload = sheetData?.data ?? sheetData;
-      const apiData = payload?.data ?? payload;
-      const dates = apiData?.dates;
-      const subjects = apiData?.subjects;
-
-      if (!subjects || typeof subjects !== 'object') {
-        toast.info('No data found in sheet');
+      const rows: string[][] = data?.rows ?? [];
+      if (!rows.length) {
+        toast.info('Sheet returned no data');
         setSheetLoading(false);
         return;
       }
 
-      if (Array.isArray(dates) && dates.length >= 2) {
-        const start = new Date(dates[0]);
-        const end = new Date(dates[dates.length - 1]);
-        const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        setDateRange(`${fmt(start)}–${fmt(end)}`);
+      // Parse CSV rows to find the week matching activeQuarter + activeWeek.
+      // Week blocks are separated by header rows (date range or "Week N" in col 0).
+      // Subject rows have a recognizable label in col 0 and day values in cols 2-6.
+      const SUBJECT_MAP: Record<string, string> = {
+        saxon: 'Math', math: 'Math',
+        reading: 'Reading', rm4: 'Reading',
+        spelling: 'Spelling',
+        shurley: 'Language Arts', english: 'Language Arts', ela: 'Language Arts', 'language arts': 'Language Arts',
+        history: 'History',
+        science: 'Science',
+      };
+
+      function matchSubject(label: string): string | null {
+        const l = label.toLowerCase().trim();
+        for (const [key, val] of Object.entries(SUBJECT_MAP)) {
+          if (l.includes(key)) return val;
+        }
+        return null;
       }
 
+      function isWeekHeader(label: string): boolean {
+        const l = label.trim();
+        return /^week\s*\d+/i.test(l) || /[A-Za-z]{3,}\s*\d{1,2}\s*[-–]/.test(l);
+      }
+
+      // Collect all week blocks
+      const allWeeks: Array<{ weekNum: number; dateRange: string; cells: Record<string, Record<string, string>> }> = [];
+      let current: typeof allWeeks[number] | null = null;
+
+      for (const row of rows) {
+        const col0 = (row[0] ?? '').trim();
+        if (isWeekHeader(col0)) {
+          if (current) allWeeks.push(current);
+          current = { weekNum: allWeeks.length + 1, dateRange: col0, cells: {} };
+          continue;
+        }
+        const subj = matchSubject(col0);
+        if (!subj) continue;
+        if (!current) current = { weekNum: 1, dateRange: '', cells: {} };
+        current.cells[subj] = {};
+        ['Monday','Tuesday','Wednesday','Thursday','Friday'].forEach((day, i) => {
+          current!.cells[subj][day] = (row[2 + i] ?? '').trim();
+        });
+      }
+      if (current) allWeeks.push(current);
+
+      // Find the week matching activeWeek number
+      const target = allWeeks.find(w => w.weekNum === activeWeek) ?? allWeeks[activeWeek - 1];
+      if (!target) {
+        toast.info(`Week ${activeWeek} not found in sheet (sheet has ${allWeeks.length} weeks)`);
+        setSheetLoading(false);
+        return;
+      }
+
+      // Build weekData from the matched week
       const newData = initWeekData();
       let cellCount = 0;
-
-      for (const [apiSubject, values] of Object.entries(subjects)) {
-        const subject = API_SUBJECT_MAP[apiSubject];
-        if (!subject || !newData[subject] || !Array.isArray(values)) continue;
-
-        (values as any[]).forEach((val, i) => {
-          const day = DAYS[i];
-          if (!day || !newData[subject][day]) return;
-
-          const cellVal = String(val ?? '');
-          const lowerVal = cellVal.toLowerCase();
-          const isTest = lowerVal.includes('test');
-          const isNoClass = cellVal === '-' || lowerVal === 'no class';
-          const numMatch = cellVal.match(/\d+/);
-          const lessonNum = numMatch ? numMatch[0] : '';
-
-          newData[subject][day] = {
-            type: isTest ? 'Test' : isNoClass ? '-' : 'Lesson',
+      for (const [subj, dayCells] of Object.entries(target.cells)) {
+        for (const [day, raw] of Object.entries(dayCells)) {
+          if (!newData[subj]?.[day]) continue;
+          const lower = raw.toLowerCase();
+          const isTest = lower.includes('test');
+          const isNoClass = raw === '-' || lower === 'no class' || raw === '';
+          const isFact = lower.includes('fact');
+          const isSG = /\bsg\b/i.test(raw) || lower.includes('study guide');
+          const type = isFact ? 'Fact Test' : isSG ? 'Study Guide' : isTest ? 'Test' : isNoClass ? '-' : 'Lesson';
+          const lessonNum = raw.match(/\d+/)?.[0] ?? '';
+          newData[subj][day] = {
+            type,
             lesson_num: lessonNum,
-            in_class: cellVal,
+            in_class: raw,
             at_home: '',
             resources: '',
             create_assign: !isNoClass && day !== 'Friday',
           };
           cellCount++;
-        });
+        }
+      }
+
+      if (target.dateRange) {
+        setDateRange(target.dateRange);
       }
 
       setWeekData(newData);
-      toast.success(`Imported ${cellCount} cells from Google Sheets`);
+      toast.success(`Loaded Week ${activeWeek} from Google Sheet (${cellCount} cells)`);
     } catch (e: any) {
       toast.error('Sheet import failed', { description: e.message });
     }
