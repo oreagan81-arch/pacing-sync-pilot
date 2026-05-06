@@ -73,10 +73,14 @@ export default function PageBuilderPage() {
   }, []);
   useRealtimeDeploy(handleRealtimeEvent);
 
-  useEffect(() => {
+  const refreshWeeks = useCallback(() => {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
       if (data) setWeeks(data);
     });
+  }, []);
+
+  useEffect(() => {
+    refreshWeeks();
     supabase.from('content_map').select('lesson_ref, subject, canvas_url, canonical_name').then(({ data }) => {
       if (data) setContentMap(data as ContentMapEntry[]);
     });
@@ -87,7 +91,7 @@ export default function PageBuilderPage() {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => setLatestNewsletter(data ?? null));
-  }, []);
+  }, [refreshWeeks]);
 
   useEffect(() => {
     if (!selectedWeekId) return;
