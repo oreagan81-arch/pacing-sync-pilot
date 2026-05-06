@@ -248,7 +248,7 @@ export function FullSheetImportDialog({ onImported }: Props) {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Quarter
+              Starting Quarter
             </label>
             <Select value={quarter} onValueChange={setQuarter}>
               <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
