@@ -20,6 +20,7 @@ import {
 } from '@/lib/together-logic';
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
+import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImportDialog';
 
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -72,10 +73,14 @@ export default function PageBuilderPage() {
   }, []);
   useRealtimeDeploy(handleRealtimeEvent);
 
-  useEffect(() => {
+  const refreshWeeks = useCallback(() => {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
       if (data) setWeeks(data);
     });
+  }, []);
+
+  useEffect(() => {
+    refreshWeeks();
     supabase.from('content_map').select('lesson_ref, subject, canvas_url, canonical_name').then(({ data }) => {
       if (data) setContentMap(data as ContentMapEntry[]);
     });
@@ -86,7 +91,7 @@ export default function PageBuilderPage() {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => setLatestNewsletter(data ?? null));
-  }, []);
+  }, [refreshWeeks]);
 
   useEffect(() => {
     if (!selectedWeekId) return;
@@ -372,6 +377,8 @@ export default function PageBuilderPage() {
         {selectedWeek && (
           <span className="text-sm text-muted-foreground">{selectedWeek.date_range}</span>
         )}
+
+        <FullSheetImportDialog onImported={refreshWeeks} />
 
         <div className="ml-auto">
           <Button
