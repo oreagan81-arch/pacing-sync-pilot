@@ -76,7 +76,7 @@ export const useSystemStore = create<SystemState>((set, get) => ({
   },
 
   fetchPacingData: async (month: string, week: number) => {
-    if (!GAS_URL || GAS_URL.trim() === '') {
+    if (!GAS_URL) {
       set({ isLoading: false });
       return;
     }
