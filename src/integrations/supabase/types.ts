@@ -67,6 +67,54 @@ export type Database = {
           },
         ]
       }
+      annual_pacing_master: {
+        Row: {
+          at_home: string | null
+          created_at: string
+          day: string
+          id: string
+          in_class: string | null
+          lesson_num: string | null
+          notes: string | null
+          quarter: string
+          school_year: string
+          subject: string
+          type: string | null
+          updated_at: string
+          week_num: number
+        }
+        Insert: {
+          at_home?: string | null
+          created_at?: string
+          day: string
+          id?: string
+          in_class?: string | null
+          lesson_num?: string | null
+          notes?: string | null
+          quarter: string
+          school_year?: string
+          subject: string
+          type?: string | null
+          updated_at?: string
+          week_num: number
+        }
+        Update: {
+          at_home?: string | null
+          created_at?: string
+          day?: string
+          id?: string
+          in_class?: string | null
+          lesson_num?: string | null
+          notes?: string | null
+          quarter?: string
+          school_year?: string
+          subject?: string
+          type?: string | null
+          updated_at?: string
+          week_num?: number
+        }
+        Relationships: []
+      }
       automation_jobs: {
         Row: {
           created_at: string
