@@ -298,6 +298,7 @@ export default function PacingEntryPage({
   }, [savedWeeks, activeQuarter, activeWeek, loadWeekById]);
 
   const handleLoadWeek = async (weekId: string) => {
+    dateEditedByUser.current = false;
     await loadWeekById(weekId, true);
   };
 
