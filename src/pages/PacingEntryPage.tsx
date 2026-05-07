@@ -532,7 +532,7 @@ export default function PacingEntryPage({
         <Input
           placeholder="Date range (e.g. Jan 6–10)"
           value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
+          onChange={(e) => { dateEditedByUser.current = true; setDateRange(e.target.value); }}
           className="w-48"
         />
 
