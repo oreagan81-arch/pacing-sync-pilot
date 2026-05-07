@@ -258,7 +258,9 @@ export default function PacingEntryPage({
     await supabase.from('weeks').update({ is_active: true }).eq('id', weekId);
 
     if (weekData2) {
-      setDateRange(weekData2.date_range || '');
+      if (!dateEditedByUser.current) {
+        setDateRange(weekData2.date_range || '');
+      }
       setReminders(weekData2.reminders || '');
       setResources(weekData2.resources || '');
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
