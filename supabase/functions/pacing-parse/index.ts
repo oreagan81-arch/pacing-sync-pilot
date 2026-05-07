@@ -14,8 +14,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   try {
-    const { pastedText } = await req.json();
-    if (!pastedText) throw new Error("No pasted text provided");
+    const { pastedText, imageBase64, mimeType } = await req.json();
+    if (!pastedText && !imageBase64) throw new Error("No pasted text or image provided");
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
