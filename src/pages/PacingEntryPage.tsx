@@ -228,6 +228,7 @@ export default function PacingEntryPage({
       await supabase.from('weeks').update({ is_active: true }).eq('id', weekRow.id);
 
       toast.success('Week saved!');
+      dateEditedByUser.current = false;
       // Refresh saved weeks list
       const { data: updated } = await supabase
         .from('weeks')
