@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -93,6 +93,7 @@ export default function PacingEntryPage({
   const config = useConfig();
   const [weekData, setWeekData] = useState<WeekData>(initWeekData);
   const [dateRange, setDateRange] = useState('');
+  const dateEditedByUser = useRef(false);
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
   const [saving, setSaving] = useState(false);
@@ -227,6 +228,7 @@ export default function PacingEntryPage({
       await supabase.from('weeks').update({ is_active: true }).eq('id', weekRow.id);
 
       toast.success('Week saved!');
+      dateEditedByUser.current = false;
       // Refresh saved weeks list
       const { data: updated } = await supabase
         .from('weeks')
@@ -257,7 +259,9 @@ export default function PacingEntryPage({
     await supabase.from('weeks').update({ is_active: true }).eq('id', weekId);
 
     if (weekData2) {
-      setDateRange(weekData2.date_range || '');
+      if (!dateEditedByUser.current) {
+        setDateRange(weekData2.date_range || '');
+      }
       setReminders(weekData2.reminders || '');
       setResources(weekData2.resources || '');
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
@@ -295,6 +299,7 @@ export default function PacingEntryPage({
   }, [savedWeeks, activeQuarter, activeWeek, loadWeekById]);
 
   const handleLoadWeek = async (weekId: string) => {
+    dateEditedByUser.current = false;
     await loadWeekById(weekId, true);
   };
 
@@ -528,7 +533,7 @@ export default function PacingEntryPage({
         <Input
           placeholder="Date range (e.g. Jan 6–10)"
           value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
+          onChange={(e) => { dateEditedByUser.current = true; setDateRange(e.target.value); }}
           className="w-48"
         />
 
