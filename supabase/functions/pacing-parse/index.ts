@@ -14,8 +14,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   try {
-    const { pastedText } = await req.json();
-    if (!pastedText) throw new Error("No pasted text provided");
+    const { pastedText, imageBase64, mimeType } = await req.json();
+    if (!pastedText && !imageBase64) throw new Error("No pasted text or image provided");
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -69,7 +69,18 @@ Return structured data for all 6 subjects × 5 days.`;
             { role: "system", content: systemPrompt },
             {
               role: "user",
-              content: `Parse this pasted pacing chart data into structured format:\n\n${pastedText}`,
+              content: imageBase64
+                ? [
+                    {
+                      type: "text",
+                      text: `Parse the pacing chart shown in this image into structured format.${pastedText ? `\n\nAdditional context:\n${pastedText}` : ''}`,
+                    },
+                    {
+                      type: "image_url",
+                      image_url: { url: `data:${mimeType || 'image/png'};base64,${imageBase64}` },
+                    },
+                  ]
+                : `Parse this pasted pacing chart data into structured format:\n\n${pastedText}`,
             },
           ],
           tools: [
