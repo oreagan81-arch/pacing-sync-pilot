@@ -93,6 +93,7 @@ export default function PacingEntryPage({
   const config = useConfig();
   const [weekData, setWeekData] = useState<WeekData>(initWeekData);
   const [dateRange, setDateRange] = useState('');
+  const dateEditedByUser = useRef(false);
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
   const [saving, setSaving] = useState(false);
