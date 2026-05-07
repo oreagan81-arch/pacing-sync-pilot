@@ -69,7 +69,18 @@ Return structured data for all 6 subjects × 5 days.`;
             { role: "system", content: systemPrompt },
             {
               role: "user",
-              content: `Parse this pasted pacing chart data into structured format:\n\n${pastedText}`,
+              content: imageBase64
+                ? [
+                    {
+                      type: "text",
+                      text: `Parse the pacing chart shown in this image into structured format.${pastedText ? `\n\nAdditional context:\n${pastedText}` : ''}`,
+                    },
+                    {
+                      type: "image_url",
+                      image_url: { url: `data:${mimeType || 'image/png'};base64,${imageBase64}` },
+                    },
+                  ]
+                : `Parse this pasted pacing chart data into structured format:\n\n${pastedText}`,
             },
           ],
           tools: [
