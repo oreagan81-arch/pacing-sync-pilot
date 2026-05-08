@@ -23,6 +23,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import MemoryPage from '@/pages/MemoryPage';
 import AutomationPage from '@/pages/AutomationPage';
 import CanvasBrainPage from '@/pages/CanvasBrainPage';
+import CanvasAuditorPage from '@/pages/CanvasAuditorPage';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient();
