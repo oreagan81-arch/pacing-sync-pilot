@@ -23,6 +23,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import MemoryPage from '@/pages/MemoryPage';
 import AutomationPage from '@/pages/AutomationPage';
 import CanvasBrainPage from '@/pages/CanvasBrainPage';
+import CanvasAuditorPage from '@/pages/CanvasAuditorPage';
 import NotFound from '@/pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -181,6 +182,7 @@ function AppContent({ config }: { config: AppConfig }) {
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/automation" element={<AutomationPage />} />
           <Route path="/canvas-brain" element={<CanvasBrainPage />} />
+          <Route path="/canvas-auditor" element={<CanvasAuditorPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </DashboardLayout>
