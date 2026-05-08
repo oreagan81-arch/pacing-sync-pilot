@@ -182,6 +182,7 @@ function AppContent({ config }: { config: AppConfig }) {
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/automation" element={<AutomationPage />} />
           <Route path="/canvas-brain" element={<CanvasBrainPage />} />
+          <Route path="/canvas-auditor" element={<CanvasAuditorPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </DashboardLayout>
