@@ -49,6 +49,10 @@ const navItems = [
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 
+const diagnosticsItems = [
+  { title: 'Canvas Auditor', url: '/canvas-auditor', icon: ClipboardCheck },
+];
+
 interface AppSidebarProps {
   activeQuarter: string;
   activeWeek: number;
