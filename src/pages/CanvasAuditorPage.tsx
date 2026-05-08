@@ -256,9 +256,8 @@ export default function CanvasAuditorPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredFindings.map((f, i) => (
-                    <>
+                    <Fragment key={i}>
                       <TableRow
-                        key={i}
                         className={`cursor-pointer ${rowBg(f.severity)}`}
                         onClick={() => setExpanded(expanded === i ? null : i)}
                       >
@@ -270,7 +269,7 @@ export default function CanvasAuditorPage() {
                         <TableCell className="font-mono text-xs truncate max-w-xs">{f.actual}</TableCell>
                       </TableRow>
                       {expanded === i && (
-                        <TableRow key={`${i}-x`}>
+                        <TableRow>
                           <TableCell colSpan={6}>
                             <pre className="text-xs whitespace-pre-wrap p-2 bg-muted rounded">
                               {JSON.stringify(f, null, 2)}
@@ -278,7 +277,7 @@ export default function CanvasAuditorPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                   {filteredFindings.length === 0 && (
                     <TableRow>
