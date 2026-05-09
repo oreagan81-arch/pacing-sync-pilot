@@ -1,51 +1,82 @@
 /**
  * THALES OS — Pacing Entry Header
  *
- * Slim header bar for the weekly pacing entry screen. Owns the
- * "Grab Resources" affordance that lets the teacher pull the latest
- * Canvas / Drive resource map for the active week without leaving the
- * planner. Parent owns the network call via `onSyncResources`.
+ * Information-dense header bar for the weekly pacing entry screen.
+ * Shows quarter/week/date range, save status, and primary actions.
  */
 import { Button } from '@/components/ui/button';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, Save } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface PacingEntryHeaderProps {
-  /** Active quarter label (e.g. "Q3"). Optional — purely cosmetic. */
   quarter?: string;
-  /** Active week number. Optional — purely cosmetic. */
   weekNum?: number;
-  /** Date range string (e.g. "Jan 6–10"). Optional — purely cosmetic. */
+  /** Pre-formatted date range string (e.g. "May 4–8, 2026"). Empty if no week selected. */
   dateRange?: string;
-  /**
-   * Fired when the teacher clicks "Grab Resources". Parent should fetch
-   * the latest content_map / Drive resources and refresh local state.
-   */
+  /** Whether the current week exists in the saved set AND grid has no unsaved edits. */
+  isSaved?: boolean;
   onSyncResources: () => void | Promise<void>;
-  /** Disables the Grab button while a sync is in flight. */
   syncing?: boolean;
+  onSave: () => void | Promise<void>;
+  saving?: boolean;
+  /** Optional accent color for the quarter pill (matches global quarter color). */
+  quarterColor?: string;
 }
 
 export function PacingEntryHeader({
   quarter,
   weekNum,
   dateRange,
+  isSaved = false,
   onSyncResources,
   syncing = false,
+  onSave,
+  saving = false,
+  quarterColor,
 }: PacingEntryHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/50 px-4 py-3">
-      <div className="flex flex-col">
-        <h1 className="text-lg font-semibold tracking-tight">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card px-5 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 min-w-0">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Pacing Entry
-          {quarter && weekNum ? (
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {quarter} · Week {weekNum}
-            </span>
-          ) : null}
-        </h1>
-        {dateRange ? (
-          <p className="text-xs text-muted-foreground">{dateRange}</p>
+        </span>
+
+        {quarter ? (
+          <span
+            className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold text-white shadow-sm"
+            style={{ backgroundColor: quarterColor || 'hsl(var(--primary))' }}
+          >
+            {quarter}
+          </span>
         ) : null}
+
+        <span className="text-muted-foreground/60">·</span>
+        <span className="text-sm font-medium">Week {weekNum ?? '—'}</span>
+
+        <span className="text-muted-foreground/60">·</span>
+        {dateRange ? (
+          <span className="text-sm text-muted-foreground">{dateRange}</span>
+        ) : (
+          <span className="text-sm text-muted-foreground/70 italic">Select a week →</span>
+        )}
+
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
+            isSaved
+              ? 'bg-emerald-500/10 text-emerald-500'
+              : 'bg-amber-500/10 text-amber-500',
+          )}
+          title={isSaved ? 'All changes saved' : 'Unsaved changes'}
+        >
+          <span
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              isSaved ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse',
+            )}
+          />
+          {isSaved ? 'Saved' : 'Unsaved'}
+        </span>
       </div>
 
       <div className="flex items-center gap-2">
@@ -64,6 +95,22 @@ export function PacingEntryHeader({
             <Download className="h-3.5 w-3.5" />
           )}
           {syncing ? 'Grabbing…' : 'Grab Resources'}
+        </Button>
+
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void onSave()}
+          disabled={saving}
+          className="gap-1.5"
+          title="Save week (⌘/Ctrl+S)"
+        >
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
+          {saving ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </div>
