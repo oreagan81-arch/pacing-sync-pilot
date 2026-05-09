@@ -242,7 +242,7 @@ export default function PacingEntryPage({
             day,
             type: d.type || null,
             lesson_num: d.lesson_num || null,
-            in_class: d.in_class || null,
+            in_class: buildInClass(subj, d),
             at_home: isFriday ? null : d.at_home || null,
             resources: d.resources || null,
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
