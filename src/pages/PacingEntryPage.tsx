@@ -143,6 +143,91 @@ function buildAtHome(subject: string, d: DayData): string {
   return '';
 }
 
+function buildAutoReminders(weekData: WeekData): string {
+  const lines: string[] = [];
+  const DAYS_LOCAL = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  const DAY_ABBR: Record<string,string> = {
+    Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed',
+    Thursday:'Thu', Friday:'Fri'
+  };
+  for (const day of DAYS_LOCAL) {
+    for (const subj of Object.keys(weekData)) {
+      const cell = weekData[subj]?.[day];
+      if (!cell?.type?.toLowerCase().includes('test')) continue;
+      const n = cell.lesson_num ? ` ${cell.lesson_num}` : '';
+      const label = ({
+        Math: `Math Test${n} — ${DAY_ABBR[day]}`,
+        Reading: `Reading Mastery Test${n} & Fluency Checkout — ${DAY_ABBR[day]}`,
+        Spelling: `Spelling Test — ${DAY_ABBR[day]}`,
+        'Language Arts': `Shurley English Test — ${DAY_ABBR[day]}`,
+        History: `History Test — ${DAY_ABBR[day]}`,
+        Science: `Science Test — ${DAY_ABBR[day]}`,
+      } as Record<string, string>)[subj];
+      if (label) lines.push(label);
+    }
+  }
+  return lines.join('\n');
+}
+
+const POWER_UP_MAP: Record<number,string> = {
+  1:'A',2:'A',3:'A',4:'A',5:'A',6:'A',7:'A',8:'A',
+  9:'B',10:'B',11:'B',12:'B',13:'B',14:'B',15:'B',
+  16:'C',17:'C',18:'C',19:'C',20:'D',21:'D',
+  22:'F',23:'E',24:'F',25:'D',26:'F',27:'F',28:'E',29:'F',
+  30:'D',31:'F',32:'E',33:'F',34:'D',35:'F',36:'E',37:'F',38:'D',39:'F',
+  40:'E',41:'F',42:'D',43:'E',44:'F',45:'D',46:'F',47:'F',
+  48:'G',49:'G',50:'F',51:'G',52:'F',53:'F',54:'G',55:'F',56:'G',
+  57:'F',58:'G',59:'F',60:'G',61:'F',62:'G',63:'F',64:'F',
+  65:'C',66:'F',67:'G',68:'E',69:'F',70:'G',71:'C',72:'D',
+  73:'F',74:'G',75:'C',76:'H',77:'H',78:'H',79:'H',80:'H',
+  81:'H',82:'H',83:'H',84:'H',85:'H',86:'H',87:'H',88:'H',
+  89:'F',90:'F',91:'I',92:'I',93:'I',94:'I',95:'I',96:'I',
+  97:'I',98:'I',99:'I',100:'I',101:'J',102:'J',103:'J',104:'J',
+  105:'J',106:'J',107:'J',108:'J',109:'J',110:'J',
+  111:'K',112:'K',113:'K',114:'K',115:'K',116:'K',117:'K',
+  118:'K',119:'K',120:'K'
+};
+
+function buildResourceRefs(rows: any[]): Set<string> {
+  const resourceRefs = new Set<string>();
+  for (const row of rows) {
+    const n = row.lesson_num;
+    if (!n) continue;
+    const num = parseInt(n);
+    if (isNaN(num)) continue;
+    const pad3 = String(num).padStart(3,'0');
+
+    if (row.subject === 'Math' && row.type !== 'Test') {
+      resourceRefs.add('HW_Evens');
+      resourceRefs.add('HW_Odds');
+      resourceRefs.add('Math_Textbook');
+      resourceRefs.add(`Math_Lesson_${pad3}`);
+      if (POWER_UP_MAP[num]) resourceRefs.add(`Math_PowerUp_${POWER_UP_MAP[num]}`);
+      const reteachStart = Math.floor((num-1)/10)*10+1;
+      resourceRefs.add(`Math_Reteaching_L${String(reteachStart).padStart(3,'0')}`);
+    }
+    if (row.subject === 'Math' && row.type === 'Test') {
+      const pad2 = String(num).padStart(2,'0');
+      resourceRefs.add(`Math_StudyGuide_${pad2}_Blank`);
+      resourceRefs.add(`Math_StudyGuide_${pad2}_Completed`);
+    }
+    if (row.subject === 'Reading') {
+      const chunkStart = Math.floor((num-1)/25)*25+1;
+      resourceRefs.add(`Reading_Book_L${String(chunkStart).padStart(3,'0')}`);
+      resourceRefs.add('Reading_Workbook_Part1');
+      resourceRefs.add('Reading_Workbook_Part2');
+      resourceRefs.add('Reading_Glossary_A');
+      resourceRefs.add('Reading_Glossary_B');
+      resourceRefs.add('Reading_Glossary_C');
+      resourceRefs.add('Spelling_Master_List');
+    }
+    if (row.subject === 'Language Arts' && row.type === 'CP') {
+      resourceRefs.add(`Classroom_Practice_${pad3}`);
+    }
+  }
+  return resourceRefs;
+}
+
 export default function PacingEntryPage({
   activeQuarter,
   setActiveQuarter,
@@ -324,8 +409,6 @@ export default function PacingEntryPage({
       if (!dateEditedByUser.current) {
         setDateRange(weekData2.date_range || '');
       }
-      setReminders(weekData2.reminders || '');
-      setResources(weekData2.resources || '');
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
     }
 
@@ -345,12 +428,35 @@ export default function PacingEntryPage({
         }
       }
       setWeekData(newData);
+
+      if (weekData2?.reminders) {
+        setReminders(weekData2.reminders);
+      } else {
+        setReminders(buildAutoReminders(newData));
+      }
+
+      const resourceRefs = buildResourceRefs(rows);
+      const matchedResources = contentMap
+        .filter((r) => resourceRefs.has(r.lesson_ref))
+        .map((r) => r.canonical_name)
+        .join('\n');
+
+      if (weekData2?.resources) {
+        setResources(weekData2.resources);
+      } else if (matchedResources) {
+        setResources(matchedResources);
+      } else {
+        setResources('');
+      }
+    } else if (weekData2) {
+      setReminders(weekData2.reminders || '');
+      setResources(weekData2.resources || '');
     }
 
     if (showToast) {
       toast.success(`Loaded ${week.quarter} Week ${week.week_num}`);
     }
-  }, [savedWeeks, setActiveQuarter, setActiveWeek]);
+  }, [savedWeeks, setActiveQuarter, setActiveWeek, contentMap]);
 
   useEffect(() => {
     if (savedWeeks.length === 0) return;
