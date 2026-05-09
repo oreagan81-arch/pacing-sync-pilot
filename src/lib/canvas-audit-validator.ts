@@ -249,13 +249,8 @@ export function validateAudit(audit: any): Finding[] {
           });
         }
       } else {
-        if (a.grading_type !== 'points') {
-          push({
-            severity: 'ERROR', course: courseName, category: 'assignment',
-            rule: 'grading_type must be points',
-            expected: 'points', actual: String(a.grading_type), field: a.name,
-          });
-        }
+        // grading_type intentionally not validated — `percent` is allowed
+        // alongside `points` for this school. Do not flag.
         if (a.points_possible !== 100) {
           push({
             severity: 'ERROR', course: courseName, category: 'assignment',
