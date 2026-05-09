@@ -63,16 +63,25 @@ export function mergeReadingSpellingRows<T extends MergeableRow>(rows: T[]): T[]
     if (!isTogetherSubject(r.subject)) merged.push(r);
   }
 
-  for (const [, dayRows] of buckets) {
+  // Merge per-day. Reading row is ALWAYS the canonical base — its
+  // lesson_num, canvas_url, type, and subject win. Spelling content is
+  // appended to in_class / at_home via <br/>, but Spelling's lesson_num
+  // must NEVER bleed onto the merged row (that would mislabel Reading
+  // homework with Spelling's lesson number).
+  for (const [day, dayRows] of buckets) {
     if (dayRows.length === 0) continue;
-    if (dayRows.length === 1) {
-      merged.push(dayRows[0]);
+
+    const reading = dayRows.find((r) => r.subject === TOGETHER_PAGE_OWNER);
+    if (!reading) {
+      // No Reading row for this day — pass Spelling rows through untouched
+      // rather than promoting Spelling's lesson_num into a "Reading" slot.
+      for (const r of dayRows) merged.push(r);
       continue;
     }
-    // Reading row leads; Spelling content appended via <br/>.
-    const reading =
-      dayRows.find((r) => r.subject === TOGETHER_PAGE_OWNER) ?? dayRows[0];
-    const others = dayRows.filter((r) => r !== reading);
+
+    // Only merge rows that share the same day as the Reading row.
+    const sameDay = dayRows.filter((r) => r.day === reading.day);
+    const others = sameDay.filter((r) => r !== reading);
 
     const inClass = others.reduce<string | null>(
       (acc, r) => concatWithBr(acc, r.in_class),
@@ -82,7 +91,15 @@ export function mergeReadingSpellingRows<T extends MergeableRow>(rows: T[]): T[]
       (acc, r) => concatWithBr(acc, r.at_home),
       reading.at_home,
     );
-    merged.push({ ...reading, in_class: inClass, at_home: atHome });
+    // Spread reading FIRST, then explicitly re-assert lesson_num + day from
+    // the Reading row so no later spread/field can overwrite them.
+    merged.push({
+      ...reading,
+      in_class: inClass,
+      at_home: atHome,
+      lesson_num: reading.lesson_num,
+      day: reading.day,
+    });
   }
   return merged;
 }
