@@ -351,7 +351,7 @@ export default function AssignmentsPage() {
     // If teacher (or a stale row) created any in those courses for this week,
     // delete them automatically.
     try {
-      const weekDates: string[] = (pacingData?.dates as string[] | undefined) || [];
+      const weekDates: string[] = computeWeekDates(selectedMonth, selectedWeek);
       if (weekDates.length > 0) {
         await deleteRogueHistoryScienceAssignments(weekDates, weekId || null);
       }
