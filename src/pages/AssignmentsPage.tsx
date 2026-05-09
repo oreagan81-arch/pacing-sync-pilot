@@ -59,6 +59,31 @@ interface PacingDbRow {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
+const WEEK_STARTS: Record<string, string> = {
+  'Q1-1':'2025-08-18','Q1-2':'2025-08-25','Q1-3':'2025-09-01',
+  'Q1-4':'2025-09-08','Q1-5':'2025-09-15','Q1-6':'2025-09-22',
+  'Q1-7':'2025-09-29','Q1-8':'2025-10-06','Q1-9':'2025-10-13',
+  'Q2-1':'2025-10-27','Q2-2':'2025-11-03','Q2-3':'2025-11-10',
+  'Q2-4':'2025-11-17','Q2-5':'2025-11-24','Q2-6':'2025-12-01',
+  'Q2-7':'2025-12-08','Q2-8':'2025-12-15','Q2-9':'2025-12-22',
+  'Q3-1':'2026-01-05','Q3-2':'2026-01-12','Q3-3':'2026-01-20',
+  'Q3-4':'2026-01-26','Q3-5':'2026-02-02','Q3-6':'2026-02-09',
+  'Q3-7':'2026-02-16','Q3-8':'2026-02-23','Q3-9':'2026-03-02',
+  'Q4-1':'2026-03-23','Q4-2':'2026-03-30','Q4-3':'2026-04-06',
+  'Q4-4':'2026-04-13','Q4-5':'2026-04-27','Q4-6':'2026-05-04',
+  'Q4-7':'2026-05-11','Q4-8':'2026-05-18','Q4-9':'2026-05-26',
+};
+
+function computeWeekDates(quarter: string, week: number): string[] {
+  const startDate = WEEK_STARTS[`${quarter}-${week}`];
+  if (!startDate) return [];
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
 export default function AssignmentsPage() {
   const config = useConfig();
   const {
@@ -145,43 +170,30 @@ export default function AssignmentsPage() {
     );
   };
 
-  // Build preview rows whenever inputs change
+  // Build preview rows whenever inputs change — sourced from Supabase pacing_rows
   useEffect(() => {
-    if (!pacingData || !config) { setPreviewRows([]); return; }
+    if (!config || !selectedMonth || !selectedWeek) { setPreviewRows([]); return; }
 
     (async () => {
       const built: PreviewRow[] = [];
-      const weekDates = pacingData.dates || [];
 
-      for (const subject of SUBJECTS) {
-        if (historyRedirect && subject === historyRedirect.from) continue;
-        const cells = pacingData.subjects[subject];
-        if (!cells) continue;
+      const { data: weekRecord } = await supabase
+        .from('weeks')
+        .select('id')
+        .eq('quarter', selectedMonth)
+        .eq('week_num', selectedWeek)
+        .maybeSingle();
 
-        for (let dayIdx = 0; dayIdx < cells.length; dayIdx++) {
-          const cell: PacingCell = cells[dayIdx];
+      if (!weekRecord) { setPreviewRows([]); return; }
 
-          // Subject-specific filters (mirror existing rules)
-          if (subject === 'Language Arts' && !cell.isTest) {
-            const upper = (cell.value || '').toUpperCase();
-            if (!upper.includes('CP')) continue;
-          }
-          if (subject === 'Spelling' && !cell.isTest) continue;
-          if (cell.isNoClass || !cell.value || cell.value === '-') continue;
+      const weekDates = computeWeekDates(selectedMonth, selectedWeek);
 
-          // Math Triple Logic: Test → 3 items (Written + Fact + Study Guide -1 day)
-          if (subject === 'Math') {
-            const items = await expandMathRow(dayIdx, cell, { config, contentMap, weekDates });
-            for (const a of items) built.push(toPreview(a));
-            continue;
-          }
+      const { data: pacingRows } = await supabase
+        .from('pacing_rows')
+        .select('*')
+        .eq('week_id', weekRecord.id);
 
-          const a = await buildAssignmentForCell(subject, dayIdx, cell, {
-            config, contentMap, weekDates,
-          });
-          if (a) built.push(toPreview(a));
-        }
-      }
+      if (!pacingRows?.length) { setPreviewRows([]); return; }
 
       function toPreview(a: BuiltAssignment): PreviewRow {
         const dbRow = findDbRow(a.subject, a.dayIndex, a.type, a.lessonNum);
@@ -199,11 +211,63 @@ export default function AssignmentsPage() {
         };
       }
 
-      // Sort by day index then subject
+      for (const subject of SUBJECTS) {
+        for (let dayIdx = 0; dayIdx < DAYS.length; dayIdx++) {
+          const day = DAYS[dayIdx];
+          const row = pacingRows.find((r: any) => r.subject === subject && r.day === day);
+          if (!row || !row.type || row.type === '-' || row.type === 'No Class') continue;
+          if (!row.create_assign) continue;
+
+          const cell: PacingCell = {
+            value: row.in_class || row.lesson_num || '',
+            lessonNum: row.lesson_num || '',
+            isTest: (row.type || '').toLowerCase().includes('test'),
+            isReview: (row.in_class || '').toLowerCase().includes('review'),
+            isNoClass: row.type === '-' || row.type === 'No Class',
+            hint_override: (row as any).hint_override ?? null,
+          };
+
+          // Math Triple Logic
+          if (subject === 'Math') {
+            const items = await expandMathRow(dayIdx, cell, { config, contentMap, weekDates });
+            for (const a of items) built.push(toPreview(a));
+            continue;
+          }
+
+          // Reading Double-Split: Test + Checkout
+          if (subject === 'Reading' && cell.isTest) {
+            const test = await buildAssignmentForCell('Reading', dayIdx, cell,
+              { config, contentMap, weekDates }, { type: 'Test' });
+            if (test) built.push(toPreview(test));
+            const checkout = await buildAssignmentForCell('Reading', dayIdx, cell,
+              { config, contentMap, weekDates }, { type: 'Checkout', isSynthetic: true });
+            if (checkout) built.push(toPreview(checkout));
+            continue;
+          }
+
+          // Spelling: only Tests create assignments
+          if (subject === 'Spelling' && !cell.isTest) continue;
+
+          // Language Arts: only CP / Classroom Practice / Test
+          if (subject === 'Language Arts') {
+            const upper = (row.type || '').toUpperCase();
+            if (!upper.includes('CP') && !upper.includes('TEST') &&
+                !upper.includes('CLASSROOM PRACTICE')) continue;
+          }
+
+          // History / Science: never create assignments
+          if (subject === 'History' || subject === 'Science') continue;
+
+          const a = await buildAssignmentForCell(subject, dayIdx, cell,
+            { config, contentMap, weekDates });
+          if (a) built.push(toPreview(a));
+        }
+      }
+
       built.sort((a, b) => a.dayIndex - b.dayIndex || a.subject.localeCompare(b.subject));
       setPreviewRows(built);
     })();
-  }, [pacingData, config, contentMap, pacingDbRows, historyRedirect]);
+  }, [selectedMonth, selectedWeek, config, contentMap, pacingDbRows]);
 
   const filtered = useMemo(() => {
     if (filter === 'All') return previewRows;
@@ -287,7 +351,7 @@ export default function AssignmentsPage() {
     // If teacher (or a stale row) created any in those courses for this week,
     // delete them automatically.
     try {
-      const weekDates: string[] = (pacingData?.dates as string[] | undefined) || [];
+      const weekDates: string[] = computeWeekDates(selectedMonth, selectedWeek);
       if (weekDates.length > 0) {
         await deleteRogueHistoryScienceAssignments(weekDates, weekId || null);
       }
