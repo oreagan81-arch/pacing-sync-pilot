@@ -409,8 +409,6 @@ export default function PacingEntryPage({
       if (!dateEditedByUser.current) {
         setDateRange(weekData2.date_range || '');
       }
-      setReminders(weekData2.reminders || '');
-      setResources(weekData2.resources || '');
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
     }
 
@@ -430,12 +428,35 @@ export default function PacingEntryPage({
         }
       }
       setWeekData(newData);
+
+      if (weekData2?.reminders) {
+        setReminders(weekData2.reminders);
+      } else {
+        setReminders(buildAutoReminders(newData));
+      }
+
+      const resourceRefs = buildResourceRefs(rows);
+      const matchedResources = contentMap
+        .filter((r) => resourceRefs.has(r.lesson_ref))
+        .map((r) => r.canonical_name)
+        .join('\n');
+
+      if (weekData2?.resources) {
+        setResources(weekData2.resources);
+      } else if (matchedResources) {
+        setResources(matchedResources);
+      } else {
+        setResources('');
+      }
+    } else if (weekData2) {
+      setReminders(weekData2.reminders || '');
+      setResources(weekData2.resources || '');
     }
 
     if (showToast) {
       toast.success(`Loaded ${week.quarter} Week ${week.week_num}`);
     }
-  }, [savedWeeks, setActiveQuarter, setActiveWeek]);
+  }, [savedWeeks, setActiveQuarter, setActiveWeek, contentMap]);
 
   useEffect(() => {
     if (savedWeeks.length === 0) return;
