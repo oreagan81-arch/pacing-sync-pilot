@@ -113,6 +113,36 @@ function buildInClass(subject: string, d: DayData): string | null {
   }
 }
 
+function buildAtHome(subject: string, d: DayData): string {
+  // Use explicit at_home if teacher typed one
+  const explicit = (d.at_home || '').trim();
+  if (explicit) return explicit;
+
+  // No at_home for these subjects (canvas page handles them differently)
+  if (['History', 'Science', 'Language Arts', 'Spelling'].includes(subject)) return '';
+
+  // Only lesson rows get at_home — not tests, reviews, or no-class
+  const type = (d.type || '').toLowerCase();
+  if (!type || type === '-' || type === 'no class' || type.includes('test') ||
+      type.includes('review') || type.includes('study guide')) return '';
+
+  const n = (d.lesson_num || '').trim();
+  if (!n) return '';
+
+  if (subject === 'Math') {
+    if (d.hint_override === 'evens') return `Lesson ${n} Evens`;
+    if (d.hint_override === 'odds') return `Lesson ${n} Odds`;
+    if (d.hint_override === 'none') return `Lesson ${n}`;
+    const num = parseInt(n);
+    const parity = isNaN(num) ? '' : num % 2 === 0 ? ' Evens' : ' Odds';
+    return `Lesson ${n}${parity}`;
+  }
+  if (subject === 'Reading') {
+    return `Lesson ${n} Workbook and Comprehension`;
+  }
+  return '';
+}
+
 export default function PacingEntryPage({
   activeQuarter,
   setActiveQuarter,
@@ -243,7 +273,7 @@ export default function PacingEntryPage({
             type: d.type || null,
             lesson_num: d.lesson_num || null,
             in_class: buildInClass(subj, d),
-            at_home: isFriday ? null : d.at_home || null,
+            at_home: isFriday ? null : buildAtHome(subj, d) || null,
             resources: d.resources || null,
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
             hint_override: d.hint_override ?? null,
