@@ -112,6 +112,8 @@ function buildInClass(subject: string, d: DayData): string | null {
       return explicit || `Lesson ${n}`;
   }
 }
+
+export default function PacingEntryPage({
   activeQuarter,
   setActiveQuarter,
   activeWeek,
