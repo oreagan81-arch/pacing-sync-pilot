@@ -83,7 +83,35 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function PacingEntryPage({
+function buildInClass(subject: string, d: DayData): string | null {
+  // If teacher typed an explicit in_class value, use it (stripped)
+  const explicit = (d.in_class || '').trim();
+  if (explicit && !/^\d+$/.test(explicit)) return explicit;
+
+  // Otherwise auto-build from subject + lesson_num
+  const n = (d.lesson_num || '').trim();
+  if (!n) return explicit || null;
+
+  switch (subject) {
+    case 'Math':
+      return `Lesson ${n}`;
+    case 'Reading':
+      return `Reading Lesson ${n}`;
+    case 'Spelling':
+      return `Spelling Lesson ${n}`;
+    case 'Language Arts': {
+      // "12.8" -> "Chapter 12, Lesson 8"
+      const dot = n.match(/^(\d+)\.(\d+)$/);
+      if (dot) return `Chapter ${dot[1]}, Lesson ${dot[2]}`;
+      return `Chapter ${n}`;
+    }
+    case 'History':
+    case 'Science':
+      return explicit || `Chapter ${n}`;
+    default:
+      return explicit || `Lesson ${n}`;
+  }
+}
   activeQuarter,
   setActiveQuarter,
   activeWeek,
