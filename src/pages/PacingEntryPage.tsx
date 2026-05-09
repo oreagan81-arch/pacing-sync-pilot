@@ -1,11 +1,16 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Zap, Loader2, CalendarDays, Sparkles, Upload, Database, X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Zap, Loader2, CalendarDays, Sparkles, Upload, Database, X,
+  ChevronDown, ChevronUp, Pencil, FolderOpen,
+} from 'lucide-react';
 import PasteImportDialog from '@/components/PasteImportDialog';
 import { DaySubjectCard } from '@/components/pacing/DaySubjectCard';
 import { PacingEntryHeader } from '@/components/pacing-entry/PacingEntryHeader';
@@ -13,6 +18,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { evaluateWeekRisk } from '@/lib/risk-engine';
+import { cn } from '@/lib/utils';
 import type { ContentMapEntry } from '@/lib/auto-link';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
@@ -31,6 +37,43 @@ const SUBJECT_TYPES: Record<string, string[]> = {
 const LA_ASSIGNABLE_TYPES = new Set(['CP', 'Classroom Practice', 'Test']);
 const isLanguageArtsAssignable = (type: string | null | undefined) =>
   LA_ASSIGNABLE_TYPES.has(type ?? '');
+
+/**
+ * Canonical Monday-of-week date for every Q+W of the 2025-2026 school year.
+ * Drives the auto date-range display in the header so we never get "Invalid Date"
+ * from a malformed free-text field.
+ */
+const WEEK_STARTS: Record<string, string> = {
+  'Q1-1': '2025-08-18', 'Q1-2': '2025-08-25', 'Q1-3': '2025-09-01',
+  'Q1-4': '2025-09-08', 'Q1-5': '2025-09-15', 'Q1-6': '2025-09-22',
+  'Q1-7': '2025-09-29', 'Q1-8': '2025-10-06', 'Q1-9': '2025-10-13',
+  'Q2-1': '2025-10-27', 'Q2-2': '2025-11-03', 'Q2-3': '2025-11-10',
+  'Q2-4': '2025-11-17', 'Q2-5': '2025-11-24', 'Q2-6': '2025-12-01',
+  'Q2-7': '2025-12-08', 'Q2-8': '2025-12-15', 'Q2-9': '2025-12-22',
+  'Q3-1': '2026-01-05', 'Q3-2': '2026-01-12', 'Q3-3': '2026-01-20',
+  'Q3-4': '2026-01-26', 'Q3-5': '2026-02-02', 'Q3-6': '2026-02-09',
+  'Q3-7': '2026-02-16', 'Q3-8': '2026-02-23', 'Q3-9': '2026-03-02',
+  'Q4-1': '2026-03-23', 'Q4-2': '2026-03-30', 'Q4-3': '2026-04-06',
+  'Q4-4': '2026-04-13', 'Q4-5': '2026-04-27', 'Q4-6': '2026-05-04',
+  'Q4-7': '2026-05-11', 'Q4-8': '2026-05-18', 'Q4-9': '2026-05-26',
+};
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function fmtIsoShort(iso: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 interface DayData {
   type: string;
@@ -62,9 +105,7 @@ function initWeekData(): WeekData {
   const data: WeekData = {};
   for (const subj of SUBJECTS) {
     data[subj] = {};
-    for (const day of DAYS) {
-      data[subj][day] = emptyDay();
-    }
+    for (const day of DAYS) data[subj][day] = emptyDay();
   }
   return data;
 }
@@ -74,7 +115,6 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // strip data URL prefix
       const idx = result.indexOf(',');
       resolve(idx >= 0 ? result.slice(idx + 1) : result);
     };
@@ -84,51 +124,34 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 function buildInClass(subject: string, d: DayData): string | null {
-  // If teacher typed an explicit in_class value, use it (stripped)
   const explicit = (d.in_class || '').trim();
   if (explicit && !/^\d+$/.test(explicit)) return explicit;
-
-  // Otherwise auto-build from subject + lesson_num
   const n = (d.lesson_num || '').trim();
   if (!n) return explicit || null;
-
   switch (subject) {
-    case 'Math':
-      return `Lesson ${n}`;
-    case 'Reading':
-      return `Reading Lesson ${n}`;
-    case 'Spelling':
-      return `Spelling Lesson ${n}`;
+    case 'Math': return `Lesson ${n}`;
+    case 'Reading': return `Reading Lesson ${n}`;
+    case 'Spelling': return `Spelling Lesson ${n}`;
     case 'Language Arts': {
-      // "12.8" -> "Chapter 12, Lesson 8"
       const dot = n.match(/^(\d+)\.(\d+)$/);
       if (dot) return `Chapter ${dot[1]}, Lesson ${dot[2]}`;
       return `Chapter ${n}`;
     }
     case 'History':
-    case 'Science':
-      return explicit || `Chapter ${n}`;
-    default:
-      return explicit || `Lesson ${n}`;
+    case 'Science': return explicit || `Chapter ${n}`;
+    default: return explicit || `Lesson ${n}`;
   }
 }
 
 function buildAtHome(subject: string, d: DayData): string {
-  // Use explicit at_home if teacher typed one
   const explicit = (d.at_home || '').trim();
   if (explicit) return explicit;
-
-  // No at_home for these subjects (canvas page handles them differently)
   if (['History', 'Science', 'Language Arts', 'Spelling'].includes(subject)) return '';
-
-  // Only lesson rows get at_home — not tests, reviews, or no-class
   const type = (d.type || '').toLowerCase();
   if (!type || type === '-' || type === 'no class' || type.includes('test') ||
       type.includes('review') || type.includes('study guide')) return '';
-
   const n = (d.lesson_num || '').trim();
   if (!n) return '';
-
   if (subject === 'Math') {
     if (d.hint_override === 'evens') return `Lesson ${n} Evens`;
     if (d.hint_override === 'odds') return `Lesson ${n} Odds`;
@@ -137,18 +160,15 @@ function buildAtHome(subject: string, d: DayData): string {
     const parity = isNaN(num) ? '' : num % 2 === 0 ? ' Evens' : ' Odds';
     return `Lesson ${n}${parity}`;
   }
-  if (subject === 'Reading') {
-    return `Lesson ${n} Workbook and Comprehension`;
-  }
+  if (subject === 'Reading') return `Lesson ${n} Workbook and Comprehension`;
   return '';
 }
 
 function buildAutoReminders(weekData: WeekData): string {
   const lines: string[] = [];
-  const DAYS_LOCAL = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
-  const DAY_ABBR: Record<string,string> = {
-    Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed',
-    Thursday:'Thu', Friday:'Fri'
+  const DAYS_LOCAL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const DAY_ABBR: Record<string, string> = {
+    Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri',
   };
   for (const day of DAYS_LOCAL) {
     for (const subj of Object.keys(weekData)) {
@@ -169,7 +189,7 @@ function buildAutoReminders(weekData: WeekData): string {
   return lines.join('\n');
 }
 
-const POWER_UP_MAP: Record<number,string> = {
+const POWER_UP_MAP: Record<number, string> = {
   1:'A',2:'A',3:'A',4:'A',5:'A',6:'A',7:'A',8:'A',
   9:'B',10:'B',11:'B',12:'B',13:'B',14:'B',15:'B',
   16:'C',17:'C',18:'C',19:'C',20:'D',21:'D',
@@ -185,47 +205,41 @@ const POWER_UP_MAP: Record<number,string> = {
   97:'I',98:'I',99:'I',100:'I',101:'J',102:'J',103:'J',104:'J',
   105:'J',106:'J',107:'J',108:'J',109:'J',110:'J',
   111:'K',112:'K',113:'K',114:'K',115:'K',116:'K',117:'K',
-  118:'K',119:'K',120:'K'
+  118:'K',119:'K',120:'K',
 };
 
 function buildResourceRefs(rows: any[]): Set<string> {
-  const resourceRefs = new Set<string>();
+  const refs = new Set<string>();
   for (const row of rows) {
     const n = row.lesson_num;
     if (!n) continue;
     const num = parseInt(n);
     if (isNaN(num)) continue;
-    const pad3 = String(num).padStart(3,'0');
-
+    const pad3 = String(num).padStart(3, '0');
     if (row.subject === 'Math' && row.type !== 'Test') {
-      resourceRefs.add('HW_Evens');
-      resourceRefs.add('HW_Odds');
-      resourceRefs.add('Math_Textbook');
-      resourceRefs.add(`Math_Lesson_${pad3}`);
-      if (POWER_UP_MAP[num]) resourceRefs.add(`Math_PowerUp_${POWER_UP_MAP[num]}`);
-      const reteachStart = Math.floor((num-1)/10)*10+1;
-      resourceRefs.add(`Math_Reteaching_L${String(reteachStart).padStart(3,'0')}`);
+      refs.add('HW_Evens'); refs.add('HW_Odds'); refs.add('Math_Textbook');
+      refs.add(`Math_Lesson_${pad3}`);
+      if (POWER_UP_MAP[num]) refs.add(`Math_PowerUp_${POWER_UP_MAP[num]}`);
+      const reteachStart = Math.floor((num - 1) / 10) * 10 + 1;
+      refs.add(`Math_Reteaching_L${String(reteachStart).padStart(3, '0')}`);
     }
     if (row.subject === 'Math' && row.type === 'Test') {
-      const pad2 = String(num).padStart(2,'0');
-      resourceRefs.add(`Math_StudyGuide_${pad2}_Blank`);
-      resourceRefs.add(`Math_StudyGuide_${pad2}_Completed`);
+      const pad2 = String(num).padStart(2, '0');
+      refs.add(`Math_StudyGuide_${pad2}_Blank`);
+      refs.add(`Math_StudyGuide_${pad2}_Completed`);
     }
     if (row.subject === 'Reading') {
-      const chunkStart = Math.floor((num-1)/25)*25+1;
-      resourceRefs.add(`Reading_Book_L${String(chunkStart).padStart(3,'0')}`);
-      resourceRefs.add('Reading_Workbook_Part1');
-      resourceRefs.add('Reading_Workbook_Part2');
-      resourceRefs.add('Reading_Glossary_A');
-      resourceRefs.add('Reading_Glossary_B');
-      resourceRefs.add('Reading_Glossary_C');
-      resourceRefs.add('Spelling_Master_List');
+      const chunkStart = Math.floor((num - 1) / 25) * 25 + 1;
+      refs.add(`Reading_Book_L${String(chunkStart).padStart(3, '0')}`);
+      refs.add('Reading_Workbook_Part1'); refs.add('Reading_Workbook_Part2');
+      refs.add('Reading_Glossary_A'); refs.add('Reading_Glossary_B'); refs.add('Reading_Glossary_C');
+      refs.add('Spelling_Master_List');
     }
     if (row.subject === 'Language Arts' && row.type === 'CP') {
-      resourceRefs.add(`Classroom_Practice_${pad3}`);
+      refs.add(`Classroom_Practice_${pad3}`);
     }
   }
-  return resourceRefs;
+  return refs;
 }
 
 export default function PacingEntryPage({
@@ -239,17 +253,23 @@ export default function PacingEntryPage({
 }: PacingEntryPageProps) {
   const config = useConfig();
   const [weekData, setWeekData] = useState<WeekData>(initWeekData);
-  const [dateRange, setDateRange] = useState('');
-  const dateEditedByUser = useRef(false);
+
+  // Date pickers — replace the old free-text dateRange field
+  const [weekStart, setWeekStart] = useState<string>('');
+  const [weekEnd, setWeekEnd] = useState<string>('');
+  const datesEditedByUser = useRef(false);
+
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
   const [syncingResources, setSyncingResources] = useState(false);
 
-  // Smart input panel state
+  // Smart input panel
+  const [smartOpen, setSmartOpen] = useState(false);
   const [pastedText, setPastedText] = useState('');
   const [aiParsing, setAiParsing] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -257,16 +277,38 @@ export default function PacingEntryPage({
   const [masterRows, setMasterRows] = useState<any[]>([]);
   const [masterLoading, setMasterLoading] = useState(false);
 
-  // Load content_map for resource badges
+  // Derived display string for the date range — never "Invalid Date"
+  const dateRange = useMemo(() => {
+    if (!weekStart || !weekEnd) return '';
+    const left = fmtIsoShort(weekStart);
+    const right = fmtIsoShort(weekEnd);
+    if (!left || !right) return '';
+    const [y] = weekEnd.split('-');
+    return `${left}–${right}, ${y}`;
+  }, [weekStart, weekEnd]);
+
+  // Auto-fill weekStart/End whenever Q+W changes (unless user manually overrode)
+  useEffect(() => {
+    if (datesEditedByUser.current) return;
+    const key = `${activeQuarter}-${activeWeek}`;
+    const start = WEEK_STARTS[key];
+    if (start) {
+      setWeekStart(start);
+      setWeekEnd(addDaysIso(start, 4));
+    } else {
+      setWeekStart('');
+      setWeekEnd('');
+    }
+  }, [activeQuarter, activeWeek]);
+
+  // Load content_map for resource auto-link
   const loadContentMap = useCallback(async () => {
     const { data } = await supabase
       .from('content_map')
       .select('lesson_ref, subject, canvas_url, canonical_name');
     if (data) setContentMap(data as ContentMapEntry[]);
   }, []);
-  useEffect(() => {
-    void loadContentMap();
-  }, [loadContentMap]);
+  useEffect(() => { void loadContentMap(); }, [loadContentMap]);
 
   const handleSyncResources = useCallback(async () => {
     setSyncingResources(true);
@@ -280,7 +322,7 @@ export default function PacingEntryPage({
     }
   }, [loadContentMap]);
 
-  // Compute risk
+  // Risk evaluation
   useEffect(() => {
     const rows = SUBJECTS.flatMap((subj) =>
       DAYS.map((day) => ({
@@ -290,7 +332,7 @@ export default function PacingEntryPage({
           weekData[subj][day].create_assign &&
           !(config?.autoLogic.historyScienceNoAssign && (subj === 'History' || subj === 'Science')) &&
           day !== 'Friday',
-      }))
+      })),
     );
     const risk = evaluateWeekRisk(rows);
     setRiskLevel(risk.level);
@@ -303,26 +345,22 @@ export default function PacingEntryPage({
       .select('id, quarter, week_num')
       .order('quarter')
       .order('week_num')
-      .then(({ data }) => {
-        if (data) setSavedWeeks(data);
-      });
+      .then(({ data }) => { if (data) setSavedWeeks(data); });
   }, []);
 
   const updateCell = useCallback(
     (subject: string, day: string, field: keyof DayData, value: string | boolean | null | undefined) => {
       setShowAiBanner(false);
+      setIsDirty(true);
       setWeekData((prev) => ({
         ...prev,
-        [subject]: {
-          ...prev[subject],
-          [day]: { ...prev[subject][day], [field]: value },
-        },
+        [subject]: { ...prev[subject], [day]: { ...prev[subject][day], [field]: value } },
       }));
     },
-    []
+    [],
   );
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       const { data: weekRow, error: weekErr } = await supabase
@@ -336,7 +374,7 @@ export default function PacingEntryPage({
             resources,
             active_hs_subject: activeHsSubject === 'Both' ? null : activeHsSubject,
           } as any,
-          { onConflict: 'quarter,week_num' }
+          { onConflict: 'quarter,week_num' },
         )
         .select('id')
         .single();
@@ -363,32 +401,41 @@ export default function PacingEntryPage({
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
             hint_override: d.hint_override ?? null,
           };
-        })
+        }),
       );
 
       const { error: rowsErr } = await supabase
         .from('pacing_rows')
         .upsert(rows, { onConflict: 'week_id,subject,day' });
-
       if (rowsErr) throw new Error(rowsErr.message);
 
       await supabase.from('weeks').update({ is_active: false }).neq('id', weekRow.id);
       await supabase.from('weeks').update({ is_active: true }).eq('id', weekRow.id);
 
       toast.success('Week saved!');
-      dateEditedByUser.current = false;
       setShowAiBanner(false);
+      setIsDirty(false);
+
       const { data: updated } = await supabase
-        .from('weeks')
-        .select('id, quarter, week_num')
-        .order('quarter')
-        .order('week_num');
+        .from('weeks').select('id, quarter, week_num').order('quarter').order('week_num');
       if (updated) setSavedWeeks(updated);
     } catch (e: any) {
       toast.error('Save failed', { description: e.message });
     }
     setSaving(false);
-  };
+  }, [activeQuarter, activeWeek, dateRange, reminders, resources, activeHsSubject, weekData, config]);
+
+  // Cmd/Ctrl+S to save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (!saving) void handleSave();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [saving, handleSave]);
 
   const loadWeekById = useCallback(async (weekId: string, showToast = true) => {
     const week = savedWeeks.find((w) => w.id === weekId);
@@ -406,9 +453,8 @@ export default function PacingEntryPage({
     await supabase.from('weeks').update({ is_active: true }).eq('id', weekId);
 
     if (weekData2) {
-      if (!dateEditedByUser.current) {
-        setDateRange(weekData2.date_range || '');
-      }
+      // Reset manual override flag on load — let auto-fill take over
+      datesEditedByUser.current = false;
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
     }
 
@@ -429,63 +475,35 @@ export default function PacingEntryPage({
       }
       setWeekData(newData);
 
-      if (weekData2?.reminders) {
-        setReminders(weekData2.reminders);
-      } else {
-        setReminders(buildAutoReminders(newData));
-      }
+      if (weekData2?.reminders) setReminders(weekData2.reminders);
+      else setReminders(buildAutoReminders(newData));
 
-      const resourceRefs = buildResourceRefs(rows);
-      const matchedResources = contentMap
-        .filter((r) => resourceRefs.has(r.lesson_ref))
-        .map((r) => r.canonical_name)
-        .join('\n');
+      const refs = buildResourceRefs(rows);
+      const matched = contentMap.filter((r) => refs.has(r.lesson_ref)).map((r) => r.canonical_name).join('\n');
 
-      if (weekData2?.resources) {
-        setResources(weekData2.resources);
-      } else if (matchedResources) {
-        setResources(matchedResources);
-      } else {
-        setResources('');
-      }
+      if (weekData2?.resources) setResources(weekData2.resources);
+      else if (matched) setResources(matched);
+      else setResources('');
     } else if (weekData2) {
       setReminders(weekData2.reminders || '');
       setResources(weekData2.resources || '');
     }
 
-    if (showToast) {
-      toast.success(`Loaded ${week.quarter} Week ${week.week_num}`);
-    }
+    setIsDirty(false);
+    if (showToast) toast.success(`Loaded ${week.quarter} Week ${week.week_num}`);
   }, [savedWeeks, setActiveQuarter, setActiveWeek, contentMap]);
 
   useEffect(() => {
     if (savedWeeks.length === 0) return;
-    const matchingWeek = savedWeeks.find((week) => week.quarter === activeQuarter && week.week_num === activeWeek);
-    if (matchingWeek) {
-      void loadWeekById(matchingWeek.id, false);
-    }
+    const matching = savedWeeks.find((w) => w.quarter === activeQuarter && w.week_num === activeWeek);
+    if (matching) void loadWeekById(matching.id, false);
   }, [savedWeeks, activeQuarter, activeWeek, loadWeekById]);
 
-  const handleLoadWeek = async (weekId: string) => {
-    dateEditedByUser.current = false;
-    await loadWeekById(weekId, true);
-  };
-
   const handleAutoRemind = () => {
-    const testDays: string[] = [];
-    for (const subj of SUBJECTS) {
-      for (const day of DAYS) {
-        if (weekData[subj][day].type?.toLowerCase().includes('test')) {
-          testDays.push(`${subj} Test — ${day}`);
-        }
-      }
-    }
-    if (testDays.length > 0) {
-      setReminders((prev) => {
-        const existing = prev ? prev + '\n' : '';
-        return existing + testDays.join('\n');
-      });
-      toast.success(`Added ${testDays.length} test reminders`);
+    const auto = buildAutoReminders(weekData);
+    if (auto) {
+      setReminders((prev) => (prev ? prev + '\n' + auto : auto));
+      toast.success('Reminders auto-filled from tests');
     } else {
       toast.info('No tests found this week');
     }
@@ -507,6 +525,7 @@ export default function PacingEntryPage({
       };
     }
     setWeekData(newData);
+    setIsDirty(true);
     setShowAiBanner(true);
     toast.success(`Parsed ${rows.length} cells — review and save`);
   };
@@ -518,10 +537,7 @@ export default function PacingEntryPage({
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       const rows = data?.rows ?? [];
-      if (!rows.length) {
-        toast.info('AI returned no rows');
-        return;
-      }
+      if (!rows.length) { toast.info('AI returned no rows'); return; }
       applyParsedRows(rows);
     } catch (e: any) {
       toast.error('AI parse failed', { description: e?.message });
@@ -531,10 +547,7 @@ export default function PacingEntryPage({
   };
 
   const handleParseText = () => {
-    if (!pastedText.trim()) {
-      toast.info('Paste some pacing text first');
-      return;
-    }
+    if (!pastedText.trim()) { toast.info('Paste some pacing text first'); return; }
     void runAiParse({ pastedText });
   };
 
@@ -542,11 +555,8 @@ export default function PacingEntryPage({
     try {
       const base64 = await fileToBase64(file);
       const mimeType = file.type || 'application/octet-stream';
-      if (mimeType.startsWith('image/')) {
-        setImagePreview(`data:${mimeType};base64,${base64}`);
-      } else {
-        setImagePreview(null);
-      }
+      if (mimeType.startsWith('image/')) setImagePreview(`data:${mimeType};base64,${base64}`);
+      else setImagePreview(null);
       await runAiParse({ pastedText: '', imageBase64: base64, mimeType });
     } catch (e: any) {
       toast.error('Could not read file', { description: e?.message });
@@ -562,24 +572,16 @@ export default function PacingEntryPage({
       .eq('school_year', SCHOOL_YEAR)
       .eq('quarter', activeQuarter)
       .eq('week_num', activeWeek)
-      .order('subject')
-      .order('day');
-    if (error) {
-      toast.error('Could not load master', { description: error.message });
-    }
+      .order('subject').order('day');
+    if (error) toast.error('Could not load master', { description: error.message });
     setMasterRows((data as any[]) ?? []);
     setMasterLoading(false);
   }, [activeQuarter, activeWeek]);
 
-  useEffect(() => {
-    void loadMaster();
-  }, [loadMaster]);
+  useEffect(() => { void loadMaster(); }, [loadMaster]);
 
   const loadMasterIntoGrid = () => {
-    if (!masterRows.length) {
-      toast.info('No master rows for this Q/W yet');
-      return;
-    }
+    if (!masterRows.length) { toast.info('No master rows for this Q/W yet'); return; }
     applyParsedRows(masterRows);
   };
 
@@ -588,25 +590,17 @@ export default function PacingEntryPage({
       DAYS.map((day) => {
         const d = weekData[subj][day];
         return {
-          school_year: SCHOOL_YEAR,
-          quarter: activeQuarter,
-          week_num: activeWeek,
-          subject: subj,
-          day,
-          type: d.type || null,
-          lesson_num: d.lesson_num || null,
-          in_class: d.in_class || null,
-          at_home: d.at_home || null,
+          school_year: SCHOOL_YEAR, quarter: activeQuarter, week_num: activeWeek,
+          subject: subj, day,
+          type: d.type || null, lesson_num: d.lesson_num || null,
+          in_class: d.in_class || null, at_home: d.at_home || null,
         };
-      })
+      }),
     );
     const { error } = await supabase
       .from('annual_pacing_master' as any)
       .upsert(rows, { onConflict: 'school_year,quarter,week_num,subject,day' });
-    if (error) {
-      toast.error('Save to master failed', { description: error.message });
-      return;
-    }
+    if (error) { toast.error('Save to master failed', { description: error.message }); return; }
     toast.success(`Saved ${rows.length} rows to master (${activeQuarter} W${activeWeek})`);
     void loadMaster();
   };
@@ -619,471 +613,539 @@ export default function PacingEntryPage({
     return config.powerUpMap[lessonNum] || null;
   };
 
+  // Auto-collapse smart input when grid has data
+  const gridHasData = useMemo(
+    () => SUBJECTS.some((s) => DAYS.some((d) => weekData[s][d].type || weekData[s][d].lesson_num)),
+    [weekData],
+  );
+  useEffect(() => { setSmartOpen(!gridHasData); }, [gridHasData]);
+
+  const isSaved =
+    savedWeeks.some((w) => w.quarter === activeQuarter && w.week_num === activeWeek) && !isDirty;
+
+  // Master tab compact summary: 1 row per subject, lesson_num for each day
+  const masterSummary = useMemo(() => {
+    const map: Record<string, Record<string, string>> = {};
+    for (const r of masterRows) {
+      if (!map[r.subject]) map[r.subject] = {};
+      map[r.subject][r.day] = r.lesson_num || (r.type === '-' ? '—' : r.type || '');
+    }
+    return map;
+  }, [masterRows]);
+
+  const sortedSavedWeeks = useMemo(
+    () => [...savedWeeks].sort((a, b) =>
+      a.quarter.localeCompare(b.quarter) || a.week_num - b.week_num),
+    [savedWeeks],
+  );
+
   return (
-    <div className="animate-in fade-in duration-300">
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* ───── Smart Input Panel ───── */}
-        <aside className="w-full lg:w-[380px] lg:shrink-0">
-          <div className="lg:sticky lg:top-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  Smart Pacing Entry
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="paste" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="paste" className="text-xs gap-1">
-                      <Sparkles className="h-3 w-3" /> Type / Paste
-                    </TabsTrigger>
-                    <TabsTrigger value="upload" className="text-xs gap-1">
-                      <Upload className="h-3 w-3" /> Upload
-                    </TabsTrigger>
-                    <TabsTrigger value="master" className="text-xs gap-1">
-                      <Database className="h-3 w-3" /> Master
-                    </TabsTrigger>
-                  </TabsList>
+    <div className="animate-in fade-in duration-300 space-y-4">
+      {/* ───────────────────────────────────────── */}
+      {/* SECTION A: Header bar (status, save, sync) */}
+      {/* ───────────────────────────────────────── */}
+      <PacingEntryHeader
+        quarter={activeQuarter}
+        weekNum={activeWeek}
+        dateRange={dateRange}
+        isSaved={isSaved}
+        onSyncResources={handleSyncResources}
+        syncing={syncingResources}
+        onSave={handleSave}
+        saving={saving}
+        quarterColor={quarterColor}
+      />
 
-                  {/* Tab 1: Paste */}
-                  <TabsContent value="paste" className="space-y-3 mt-3">
-                    <Textarea
-                      rows={10}
-                      value={pastedText}
-                      onChange={(e) => setPastedText(e.target.value)}
-                      placeholder={`Paste or type your pacing for this week.\nAny format works — shorthand, full text, or copied from any source.\n\nExample:\nMath: 101, 102, 103, 104, Test 10\nReading: 109, 110, 111, 112, Test 11\nSpelling: L97, L98, L99, review, Test\nELA: 12.1, 12.2, 12.3 CP44, CP44, Test\nHistory: Ch5, Ch5, Ch6, Ch6, -\nScience: -, -, -, -, -`}
-                      className="text-xs font-mono"
-                    />
-                    <Button
-                      onClick={handleParseText}
-                      disabled={aiParsing}
-                      className="w-full gap-1.5"
-                    >
-                      {aiParsing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      Parse with AI ✦
-                    </Button>
-                  </TabsContent>
+      {/* SECTION A.2: Week selector bar */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/50 px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          {['Q1', 'Q2', 'Q3', 'Q4'].map((q) => (
+            <button
+              key={q}
+              onClick={() => { datesEditedByUser.current = false; setActiveQuarter(q); }}
+              className={cn(
+                'px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all',
+                activeQuarter === q
+                  ? 'text-white shadow-md'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80',
+              )}
+              style={activeQuarter === q ? { backgroundColor: quarterColor } : undefined}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
 
-                  {/* Tab 2: Upload */}
-                  <TabsContent value="upload" className="space-y-3 mt-3">
-                    <label
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.add('border-primary', 'bg-primary/5');
-                      }}
-                      onDragLeave={(e) => {
-                        e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) void handleFileDrop(file);
-                      }}
-                      className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                    >
-                      <Upload className="h-6 w-6 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">
-                        Drop a screenshot, photo, or PDF of your pacing guide
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        PNG · JPG · HEIC · PDF
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) void handleFileDrop(file);
-                        }}
-                      />
-                    </label>
-                    {imagePreview && (
-                      <div className="relative rounded border border-border overflow-hidden">
-                        <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover" />
-                        <button
-                          onClick={() => setImagePreview(null)}
-                          className="absolute top-1 right-1 rounded-full bg-background/80 p-1 hover:bg-background"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                    {aiParsing && (
-                      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Parsing with AI...
-                      </div>
-                    )}
-                  </TabsContent>
-
-                  {/* Tab 3: Master */}
-                  <TabsContent value="master" className="space-y-3 mt-3">
-                    <div className="text-xs text-muted-foreground">
-                      School year <span className="font-mono">{SCHOOL_YEAR}</span> · {activeQuarter} W{activeWeek}
-                    </div>
-                    <div className="max-h-64 overflow-auto rounded border border-border">
-                      <table className="w-full text-xs">
-                        <thead className="bg-muted/50 sticky top-0">
-                          <tr>
-                            <th className="px-2 py-1 text-left font-semibold">Subject</th>
-                            <th className="px-2 py-1 text-left font-semibold">Day</th>
-                            <th className="px-2 py-1 text-left font-semibold">Lesson</th>
-                            <th className="px-2 py-1 text-left font-semibold">Type</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {masterLoading ? (
-                            <tr>
-                              <td colSpan={4} className="px-2 py-3 text-center text-muted-foreground">
-                                Loading...
-                              </td>
-                            </tr>
-                          ) : masterRows.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="px-2 py-3 text-center text-muted-foreground">
-                                No master rows yet
-                              </td>
-                            </tr>
-                          ) : (
-                            masterRows.map((r) => (
-                              <tr key={r.id} className="border-t border-border/50">
-                                <td className="px-2 py-1">{r.subject}</td>
-                                <td className="px-2 py-1">{r.day}</td>
-                                <td className="px-2 py-1 font-mono">{r.lesson_num || '—'}</td>
-                                <td className="px-2 py-1">{r.type || '—'}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button size="sm" variant="outline" onClick={loadMasterIntoGrid} disabled={masterLoading || masterRows.length === 0}>
-                        Load into Grid
-                      </Button>
-                      <Button size="sm" onClick={saveGridToMaster}>
-                        Save Grid → Master
-                      </Button>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
-        </aside>
-
-        {/* ───── Header + Grid ───── */}
-        <div className="flex-1 min-w-0 space-y-6">
-          <PacingEntryHeader
-            quarter={activeQuarter}
-            weekNum={activeWeek}
-            dateRange={dateRange}
-            onSyncResources={handleSyncResources}
-            syncing={syncingResources}
-          />
-
-          {/* Sub-header controls */}
-          <div className="flex flex-wrap items-center gap-3">
-            {['Q1', 'Q2', 'Q3', 'Q4'].map((q) => (
-              <button
-                key={q}
-                onClick={() => setActiveQuarter(q)}
-                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                  activeQuarter === q
-                    ? 'text-white shadow-md'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-                style={activeQuarter === q ? { backgroundColor: quarterColor } : undefined}
-              >
-                {q}
-              </button>
+        <Select
+          value={String(activeWeek)}
+          onValueChange={(v) => { datesEditedByUser.current = false; setActiveWeek(Number(v)); }}
+        >
+          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 9 }, (_, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>Week {i + 1}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
 
-            <Select value={String(activeWeek)} onValueChange={(v) => setActiveWeek(Number(v))}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>
-                    Week {i + 1}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Auto date display + edit-popover override */}
+        <div className="flex items-center gap-1.5 text-sm">
+          <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className={cn(dateRange ? 'font-medium' : 'text-muted-foreground/70 italic')}>
+            {dateRange || 'No date range'}
+          </span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Edit week dates">
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 space-y-3" align="start">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Override week dates
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs">
+                  Monday (start)
+                  <Input
+                    type="date"
+                    value={weekStart}
+                    onChange={(e) => {
+                      datesEditedByUser.current = true;
+                      setWeekStart(e.target.value);
+                      if (e.target.value) setWeekEnd(addDaysIso(e.target.value, 4));
+                      setIsDirty(true);
+                    }}
+                    className="mt-1"
+                  />
+                </label>
+                <label className="text-xs">
+                  Friday (end)
+                  <Input
+                    type="date"
+                    value={weekEnd}
+                    onChange={(e) => {
+                      datesEditedByUser.current = true;
+                      setWeekEnd(e.target.value);
+                      setIsDirty(true);
+                    }}
+                    className="mt-1"
+                  />
+                </label>
+              </div>
+              <Button
+                variant="outline" size="sm" className="w-full"
+                onClick={() => {
+                  datesEditedByUser.current = false;
+                  const start = WEEK_STARTS[`${activeQuarter}-${activeWeek}`];
+                  if (start) {
+                    setWeekStart(start);
+                    setWeekEnd(addDaysIso(start, 4));
+                  }
+                }}
+              >
+                Reset to canonical
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
 
-            <Input
-              placeholder="Date range (e.g. Jan 6–10)"
-              value={dateRange}
-              onChange={(e) => { dateEditedByUser.current = true; setDateRange(e.target.value); }}
-              className="w-48"
-            />
+        <div className="flex-1" />
 
-            <PasteImportDialog onImport={(data) => setWeekData(data)} />
+        {sortedSavedWeeks.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <FolderOpen className="h-3.5 w-3.5" />
+                Load Week
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="end">
+              <div className="max-h-72 overflow-auto py-1">
+                {sortedSavedWeeks.map((w) => {
+                  const active = w.quarter === activeQuarter && w.week_num === activeWeek;
+                  return (
+                    <button
+                      key={w.id}
+                      onClick={() => { datesEditedByUser.current = false; void loadWeekById(w.id, true); }}
+                      className={cn(
+                        'flex w-full items-center justify-between px-3 py-1.5 text-xs hover:bg-muted',
+                        active && 'bg-muted/50 font-semibold',
+                      )}
+                    >
+                      <span>{w.quarter} · Week {w.week_num}</span>
+                      {active && <span className="text-emerald-500">●</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
 
-            <Button variant="outline" size="sm" onClick={handleAutoRemind} className="gap-1.5">
-              <Zap className="h-3.5 w-3.5" />
-              Auto-Remind
-            </Button>
+        <PasteImportDialog onImport={(d) => { setWeekData(d); setIsDirty(true); }} />
+      </div>
 
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-              <Save className="h-3.5 w-3.5" />
-              {saving ? 'Saving...' : 'Save Draft'}
-            </Button>
+      {/* ───────────────────────────────────────── */}
+      {/* SECTION B: Smart Input (collapsible)       */}
+      {/* ───────────────────────────────────────── */}
+      <Collapsible open={smartOpen} onOpenChange={setSmartOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <button className="flex w-full items-center justify-between gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold">Smart Input</span>
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                    gridHasData
+                      ? 'bg-muted text-muted-foreground'
+                      : 'bg-primary/10 text-primary',
+                  )}
+                >
+                  {gridHasData ? 'Has data' : 'AI Ready'}
+                </span>
+              </div>
+              {smartOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </CollapsibleTrigger>
 
-            {savedWeeks.length > 0 && (
-              <Select onValueChange={handleLoadWeek}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Load Week..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {savedWeeks.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.quarter} Wk {w.week_num}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <Tabs defaultValue="paste" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="paste" className="text-xs gap-1">
+                    <Sparkles className="h-3 w-3" /> Type / Paste
+                  </TabsTrigger>
+                  <TabsTrigger value="upload" className="text-xs gap-1">
+                    <Upload className="h-3 w-3" /> Upload
+                  </TabsTrigger>
+                  <TabsTrigger value="master" className="text-xs gap-1">
+                    <Database className="h-3 w-3" /> Annual Master
+                  </TabsTrigger>
+                </TabsList>
 
-          {/* AI banner */}
-          {showAiBanner && (
-            <div className="flex items-center justify-between gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
-              <span>✦ AI parse complete — review all fields before saving</span>
-              <button onClick={() => setShowAiBanner(false)} className="opacity-70 hover:opacity-100">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
+                <TabsContent value="paste" className="space-y-3 mt-3">
+                  <Textarea
+                    rows={8}
+                    value={pastedText}
+                    onChange={(e) => setPastedText(e.target.value)}
+                    placeholder={`Paste or type your pacing for this week.\n\nExample:\nMath: 101, 102, 103, 104, Test 10\nReading: 109, 110, 111, 112, Test 11\nSpelling: L97, L98, L99, review, Test\nELA: 12.1, 12.2, 12.3 CP44, CP44, Test\nHistory: Ch5, Ch5, Ch6, Ch6, -\nScience: -, -, -, -, -`}
+                    className="text-xs font-mono"
+                  />
+                  <Button onClick={handleParseText} disabled={aiParsing} className="w-full gap-1.5">
+                    {aiParsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Parse with AI ✦
+                  </Button>
+                </TabsContent>
 
-          {/* Week-level fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+                <TabsContent value="upload" className="space-y-3 mt-3">
+                  <label
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
+                    onDragLeave={(e) => e.currentTarget.classList.remove('border-primary', 'bg-primary/5')}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) void handleFileDrop(file);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  >
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      Drop a screenshot, photo, or PDF of your pacing guide
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">PNG · JPG · HEIC · PDF</span>
+                    <input
+                      type="file" accept="image/*,application/pdf" className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFileDrop(f); }}
+                    />
+                  </label>
+                  {imagePreview && (
+                    <div className="relative rounded border border-border overflow-hidden">
+                      <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover" />
+                      <button
+                        onClick={() => setImagePreview(null)}
+                        className="absolute top-1 right-1 rounded-full bg-background/80 p-1 hover:bg-background"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {aiParsing && (
+                    <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Parsing with AI...
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="master" className="space-y-3 mt-3">
+                  <div className="text-xs text-muted-foreground">
+                    Annual master · {SCHOOL_YEAR} · {activeQuarter} W{activeWeek}
+                  </div>
+                  <div className="overflow-auto rounded border border-border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-2 py-1.5 text-left font-semibold">Subject</th>
+                          {DAYS.map((d) => (
+                            <th key={d} className="px-2 py-1.5 text-left font-semibold">
+                              {d.slice(0, 3)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {masterLoading ? (
+                          <tr><td colSpan={6} className="px-2 py-3 text-center text-muted-foreground">Loading…</td></tr>
+                        ) : Object.keys(masterSummary).length === 0 ? (
+                          <tr><td colSpan={6} className="px-2 py-3 text-center text-muted-foreground">No master rows yet</td></tr>
+                        ) : (
+                          SUBJECTS.filter((s) => masterSummary[s]).map((s) => (
+                            <tr key={s} className="border-t border-border/50">
+                              <td className="px-2 py-1 font-medium">{s}</td>
+                              {DAYS.map((d) => (
+                                <td key={d} className="px-2 py-1 font-mono text-muted-foreground">
+                                  {masterSummary[s][d] || '—'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" variant="outline" onClick={loadMasterIntoGrid}
+                      disabled={masterLoading || masterRows.length === 0}>
+                      Load into Grid
+                    </Button>
+                    <Button size="sm" onClick={saveGridToMaster}>Save Grid → Master</Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* AI banner */}
+      {showAiBanner && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+          <span>✦ AI parsed cells — review fields below and save when ready</span>
+          <button onClick={() => setShowAiBanner(false)} className="opacity-70 hover:opacity-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────── */}
+      {/* SECTION C: Editable grid + week-level fields */}
+      {/* ───────────────────────────────────────── */}
+      <div className="space-y-4">
+        {/* Reminders + Resources */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Reminders
               </label>
-              <Textarea
-                value={reminders}
-                onChange={(e) => setReminders(e.target.value)}
-                placeholder="One reminder per line..."
-                className="border-l-4 bg-[#fff8fb]"
-                style={{ borderLeftColor: '#c51062' }}
-                rows={3}
-              />
+              <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
+                <Zap className="h-3 w-3" /> Auto-fill Tests
+              </Button>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Resources
-              </label>
-              <Textarea
-                value={resources}
-                onChange={(e) => setResources(e.target.value)}
-                placeholder="Resource links or labels..."
-                className="border-l-4 bg-[#faf8ff]"
-                style={{ borderLeftColor: '#6644bb' }}
-                rows={3}
-              />
-            </div>
+            <Textarea
+              value={reminders}
+              onChange={(e) => { setReminders(e.target.value); setIsDirty(true); }}
+              placeholder="One reminder per line..."
+              className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
+              style={{ borderLeftColor: '#c51062' }}
+              rows={3}
+            />
           </div>
-
-          {/* Active H/S subject toggle */}
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/50 px-4 py-3">
+          <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Active H/S Subject
+              Resources
             </label>
-            <div className="flex gap-1">
-              {(['Both', 'History', 'Science'] as const).map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setActiveHsSubject(opt)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                    activeHsSubject === opt
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  }`}
-                >
-                  {opt}
-                </button>
+            <Textarea
+              value={resources}
+              onChange={(e) => { setResources(e.target.value); setIsDirty(true); }}
+              placeholder="Resource links or labels..."
+              className="border-l-4 bg-teal-50/50 dark:bg-teal-950/20"
+              style={{ borderLeftColor: '#0d9488' }}
+              rows={3}
+            />
+          </div>
+        </div>
+
+        {/* Day × Subject grid — desktop */}
+        <div className="hidden md:block rounded-lg border border-border bg-card/30 overflow-x-auto">
+          <div className="min-w-[1100px]">
+            <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 p-2 border-b border-border bg-muted/30 sticky top-0 z-10">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" /> Subject
+              </div>
+              {DAYS.map((day) => (
+                <div key={day} className="text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  {day}
+                </div>
               ))}
             </div>
-            {activeHsSubject !== 'Both' && (
-              <span className="text-xs text-muted-foreground">
-                The {activeHsSubject === 'History' ? 'Science' : 'History'} Canvas page will show a redirect to {activeHsSubject}.
-              </span>
-            )}
-          </div>
 
-          {/* Day × Subject grid — desktop */}
-          <div className="hidden md:block rounded-lg border border-border bg-card/30 overflow-x-auto">
-            <div className="min-w-[1100px]">
-              <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 p-2 border-b border-border bg-muted/30 sticky top-0 z-10">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  Subject
-                </div>
-                {DAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="text-center text-xs font-bold uppercase tracking-wider text-muted-foreground"
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {SUBJECTS.map((subject) => {
-                const courseId = config?.courseIds[subject];
-                const prefix = config?.assignmentPrefixes[subject] ?? '';
-                const isHsBlocked =
-                  !!config?.autoLogic.historyScienceNoAssign &&
-                  (subject === 'History' || subject === 'Science');
-                if (
-                  activeHsSubject !== 'Both' &&
-                  ((subject === 'History' && activeHsSubject === 'Science') ||
-                    (subject === 'Science' && activeHsSubject === 'History'))
-                ) {
-                  return null;
-                }
-                return (
-                  <div
-                    key={subject}
-                    className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 p-2 border-b border-border/50 last:border-b-0"
-                  >
-                    <div className="flex flex-col justify-center gap-1 px-2">
-                      <span className="text-sm font-bold leading-tight">{subject}</span>
-                      {courseId && (
-                        <span className="text-[9px] font-mono text-muted-foreground">
-                          Course {courseId}
-                        </span>
-                      )}
-                      {isTestWeek(subject) && (
-                        <span className="inline-flex items-center w-fit rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-warning">
-                          Test Week
-                        </span>
-                      )}
-                      {subject === 'Math' &&
-                        (() => {
-                          const mondayLesson = weekData.Math.Monday.lesson_num;
-                          const pu = getPowerUp(mondayLesson);
-                          return pu ? (
-                            <span className="inline-flex items-center w-fit rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-foreground">
-                              Power Up {pu}
-                            </span>
-                          ) : null;
-                        })()}
-                    </div>
-
-                    {DAYS.map((day) => {
-                      const cell = weekData[subject][day];
-                      const isLaBlocked =
-                        subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
-                      return (
-                        <DaySubjectCard
-                          key={day}
-                          subject={subject}
-                          day={day}
-                          cell={cell}
-                          prefix={prefix}
-                          isFriday={day === 'Friday'}
-                          isHsBlocked={isHsBlocked}
-                          isLaBlocked={isLaBlocked}
-                          availableTypes={SUBJECT_TYPES[subject] ?? ['Lesson', 'Test', '-']}
-                          contentMap={contentMap}
-                          subjectAccent="hsl(var(--primary))"
-                          onChange={(field, value) =>
-                            updateCell(subject, day, field as keyof typeof cell, value)
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mobile grid */}
-          <div className="md:hidden space-y-3">
             {SUBJECTS.map((subject) => {
               const courseId = config?.courseIds[subject];
               const prefix = config?.assignmentPrefixes[subject] ?? '';
               const isHsBlocked =
-                !!config?.autoLogic.historyScienceNoAssign &&
-                (subject === 'History' || subject === 'Science');
+                !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
               if (
                 activeHsSubject !== 'Both' &&
                 ((subject === 'History' && activeHsSubject === 'Science') ||
                   (subject === 'Science' && activeHsSubject === 'History'))
-              ) {
-                return null;
-              }
+              ) return null;
               return (
-                <div key={subject} className="rounded-lg border border-border bg-card/30 overflow-hidden">
-                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/30">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-bold leading-tight truncate">{subject}</span>
-                      {courseId && (
-                        <span className="text-[9px] font-mono text-muted-foreground">#{courseId}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isTestWeek(subject) && (
-                        <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-warning">
-                          Test
+                <div key={subject} className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 p-2 border-b border-border/50 last:border-b-0">
+                  <div className="flex flex-col justify-center gap-1 px-2">
+                    <span className="text-sm font-bold leading-tight">{subject}</span>
+                    {courseId && (
+                      <span className="text-[9px] font-mono text-muted-foreground">Course {courseId}</span>
+                    )}
+                    {isTestWeek(subject) && (
+                      <span className="inline-flex items-center w-fit rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600">
+                        Test Week
+                      </span>
+                    )}
+                    {subject === 'Math' && (() => {
+                      const pu = getPowerUp(weekData.Math.Monday.lesson_num);
+                      return pu ? (
+                        <span className="inline-flex items-center w-fit rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-foreground">
+                          Power Up {pu}
                         </span>
-                      )}
-                      {subject === 'Math' &&
-                        (() => {
-                          const pu = getPowerUp(weekData.Math.Monday.lesson_num);
-                          return pu ? (
-                            <span className="rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-foreground">
-                              PU {pu}
-                            </span>
-                          ) : null;
-                        })()}
-                    </div>
+                      ) : null;
+                    })()}
                   </div>
-                  <div className="overflow-x-auto snap-x snap-mandatory">
-                    <div className="flex gap-2 p-2" style={{ minWidth: 'max-content' }}>
-                      {DAYS.map((day) => {
-                        const cell = weekData[subject][day];
-                        const isLaBlocked =
-                          subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
-                        return (
-                          <div key={day} className="snap-start w-[260px] shrink-0">
-                            <DaySubjectCard
-                              subject={subject}
-                              day={day}
-                              cell={cell}
-                              prefix={prefix}
-                              isFriday={day === 'Friday'}
-                              isHsBlocked={isHsBlocked}
-                              isLaBlocked={isLaBlocked}
-                              availableTypes={SUBJECT_TYPES[subject] ?? ['Lesson', 'Test', '-']}
-                              contentMap={contentMap}
-                              subjectAccent="hsl(var(--primary))"
-                              onChange={(field, value) =>
-                                updateCell(subject, day, field as keyof typeof cell, value)
-                              }
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  {DAYS.map((day) => {
+                    const cell = weekData[subject][day];
+                    const isLaBlocked = subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
+                    return (
+                      <DaySubjectCard
+                        key={day}
+                        subject={subject}
+                        day={day}
+                        cell={cell}
+                        prefix={prefix}
+                        isFriday={day === 'Friday'}
+                        isHsBlocked={isHsBlocked}
+                        isLaBlocked={isLaBlocked}
+                        availableTypes={SUBJECT_TYPES[subject] ?? ['Lesson', 'Test', '-']}
+                        contentMap={contentMap}
+                        subjectAccent="hsl(var(--primary))"
+                        onChange={(field, value) =>
+                          updateCell(subject, day, field as keyof typeof cell, value)
+                        }
+                      />
+                    );
+                  })}
                 </div>
               );
             })}
           </div>
+        </div>
+
+        {/* Mobile grid */}
+        <div className="md:hidden space-y-3">
+          {SUBJECTS.map((subject) => {
+            const courseId = config?.courseIds[subject];
+            const prefix = config?.assignmentPrefixes[subject] ?? '';
+            const isHsBlocked =
+              !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
+            if (
+              activeHsSubject !== 'Both' &&
+              ((subject === 'History' && activeHsSubject === 'Science') ||
+                (subject === 'Science' && activeHsSubject === 'History'))
+            ) return null;
+            return (
+              <div key={subject} className="rounded-lg border border-border bg-card/30 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-bold leading-tight truncate">{subject}</span>
+                    {courseId && <span className="text-[9px] font-mono text-muted-foreground">#{courseId}</span>}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isTestWeek(subject) && (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600">
+                        Test
+                      </span>
+                    )}
+                    {subject === 'Math' && (() => {
+                      const pu = getPowerUp(weekData.Math.Monday.lesson_num);
+                      return pu ? (
+                        <span className="rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-foreground">
+                          PU {pu}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
+                </div>
+                <div className="overflow-x-auto snap-x snap-mandatory">
+                  <div className="flex gap-2 p-2" style={{ minWidth: 'max-content' }}>
+                    {DAYS.map((day) => {
+                      const cell = weekData[subject][day];
+                      const isLaBlocked = subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
+                      return (
+                        <div key={day} className="snap-start w-[260px] shrink-0">
+                          <DaySubjectCard
+                            subject={subject}
+                            day={day}
+                            cell={cell}
+                            prefix={prefix}
+                            isFriday={day === 'Friday'}
+                            isHsBlocked={isHsBlocked}
+                            isLaBlocked={isLaBlocked}
+                            availableTypes={SUBJECT_TYPES[subject] ?? ['Lesson', 'Test', '-']}
+                            contentMap={contentMap}
+                            subjectAccent="hsl(var(--primary))"
+                            onChange={(field, value) =>
+                              updateCell(subject, day, field as keyof typeof cell, value)
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* H/S subject toggle */}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/50 px-4 py-3">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Active H/S Subject
+          </label>
+          <div className="flex gap-1">
+            {(['Both', 'History', 'Science'] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { setActiveHsSubject(opt); setIsDirty(true); }}
+                className={cn(
+                  'px-3 py-1 rounded-md text-xs font-semibold transition-all',
+                  activeHsSubject === opt
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                )}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+          {activeHsSubject !== 'Both' && (
+            <span className="text-xs text-muted-foreground">
+              The {activeHsSubject === 'History' ? 'Science' : 'History'} Canvas page will show a redirect to {activeHsSubject}.
+            </span>
+          )}
         </div>
       </div>
     </div>
