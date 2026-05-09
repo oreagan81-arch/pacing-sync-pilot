@@ -283,6 +283,18 @@ export default function AssignmentsPage() {
     else if (fail === 0) toast.success(`Deployed ${ok}, skipped ${skip} unchanged`);
     else toast.warning(`Deployed ${ok}, skipped ${skip}, failed ${fail}`);
 
+    // Post-deploy cleanup: History/Science must NEVER have assignments.
+    // If teacher (or a stale row) created any in those courses for this week,
+    // delete them automatically.
+    try {
+      const weekDates: string[] = (pacingData?.dates as string[] | undefined) || [];
+      if (weekDates.length > 0) {
+        await deleteRogueHistoryScienceAssignments(weekDates, weekId || null);
+      }
+    } catch (e) {
+      console.warn('Rogue cleanup failed', e);
+    }
+
     setDeploying(false);
     setSelected(new Set());
     // Refresh DB rows to pick up new canvas_assignment_id + hashes
@@ -294,6 +306,57 @@ export default function AssignmentsPage() {
       setPacingDbRows((rows as PacingDbRow[]) || []);
     }
   };
+
+  /**
+   * Delete any assignments lingering in History (21934) or Science (21970)
+   * whose due_at falls inside the current week. Per Thales policy these
+   * subjects are page/announcement-only — no Canvas assignments allowed.
+   */
+  async function deleteRogueHistoryScienceAssignments(
+    weekDates: string[],
+    weekIdForLog: string | null,
+  ) {
+    const HIST_SCI_COURSES: Array<{ id: number; subject: 'History' | 'Science' }> = [
+      { id: 21934, subject: 'History' },
+      { id: 21970, subject: 'Science' },
+    ];
+    for (const { id: courseId, subject } of HIST_SCI_COURSES) {
+      const { data, error } = await supabase.functions.invoke('canvas-fetch', {
+        body: { action: 'list_assignments', courseId: String(courseId) },
+      });
+      if (error) {
+        console.warn(`canvas-fetch list_assignments failed for ${subject}`, error);
+        continue;
+      }
+      const assignments: Array<{ id: number | string; name: string; due_at: string | null }> =
+        Array.isArray(data) ? data : [];
+      const weekAssignments = assignments.filter((a) => {
+        if (!a.due_at) return false;
+        return weekDates.includes(a.due_at.slice(0, 10));
+      });
+      for (const a of weekAssignments) {
+        await supabase.functions.invoke('canvas-patch', {
+          body: {
+            patches: [{
+              courseId: String(courseId),
+              assignmentId: String(a.id),
+              action: 'delete',
+            }],
+          },
+        });
+        console.warn(`Deleted rogue ${subject} assignment: ${a.name}`);
+        await supabase.from('deploy_log').insert({
+          subject,
+          week_id: weekIdForLog,
+          action: 'auto_delete_rogue',
+          status: 'OK',
+          message: `Deleted rogue ${subject} assignment "${a.name}" (id ${a.id}) in course ${courseId}`,
+          payload: { courseId, assignmentId: a.id, name: a.name, due_at: a.due_at },
+        });
+      }
+    }
+  }
+
 
   const statusBadge = (s: DeployStatus) => {
     switch (s) {
