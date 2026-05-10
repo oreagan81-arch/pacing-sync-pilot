@@ -172,7 +172,7 @@ export default function PageBuilderPage() {
       return generateHomeroomPageHtml({
         weekNum: selectedWeek.week_num,
         quarter: selectedWeek.quarter,
-        dateRange: selectedWeek.date_range || '',
+        dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
         reminders: selectedWeek.reminders || '',
         resources: selectedWeek.resources || '',
@@ -190,7 +190,7 @@ export default function PageBuilderPage() {
         activeSubject: activeHs as 'History' | 'Science',
         weekNum: selectedWeek.week_num,
         quarter: selectedWeek.quarter,
-        dateRange: selectedWeek.date_range || '',
+        dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
       });
     }
@@ -201,7 +201,7 @@ export default function PageBuilderPage() {
       rows: subjectRows,
       quarter: selectedWeek.quarter,
       weekNum: selectedWeek.week_num,
-      dateRange: selectedWeek.date_range || '',
+      dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
       reminders: selectedWeek.reminders || '',
       resources: selectedWeek.resources || '',
       quarterColor,
@@ -242,7 +242,7 @@ export default function PageBuilderPage() {
       html = generateHomeroomPageHtml({
         weekNum: selectedWeek.week_num,
         quarter: selectedWeek.quarter,
-        dateRange: selectedWeek.date_range || '',
+        dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
         reminders: selectedWeek.reminders || '',
         resources: selectedWeek.resources || '',
@@ -263,7 +263,7 @@ export default function PageBuilderPage() {
           activeSubject: activeHs as 'History' | 'Science',
           weekNum: selectedWeek.week_num,
           quarter: selectedWeek.quarter,
-          dateRange: selectedWeek.date_range || '',
+          dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
           quarterColor,
         });
       } else {
@@ -281,7 +281,7 @@ export default function PageBuilderPage() {
           rows: sRows,
           quarter: selectedWeek.quarter,
           weekNum: selectedWeek.week_num,
-          dateRange: selectedWeek.date_range || '',
+          dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
           reminders: selectedWeek.reminders || '',
           resources: selectedWeek.resources || '',
           quarterColor,
