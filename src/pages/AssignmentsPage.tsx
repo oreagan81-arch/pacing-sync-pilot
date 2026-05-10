@@ -107,6 +107,10 @@ export default function AssignmentsPage() {
   const [filter, setFilter] = useState<string>('All');
   const [deployResults, setDeployResults] = useState<Record<string, DeployStatus>>({});
   const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
+  const [testMode, setTestMode] = useState(false);
+  const [testRunning, setTestRunning] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
 
   const toggleForce = (key: string) => {
     setForcedRows((prev) => {
