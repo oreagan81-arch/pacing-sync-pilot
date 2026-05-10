@@ -9,13 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Rocket, Loader2, AlertCircle, ArrowRightLeft, ShieldCheck,
-  CheckCircle2, ChevronDown, Eye, SkipForward,
+  CheckCircle2, ChevronDown, Eye, SkipForward, FlaskConical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSystemStore, type PacingCell } from '@/store/useSystemStore';
@@ -30,6 +33,8 @@ import {
   formatDueET,
   type BuiltAssignment,
 } from '@/lib/assignment-build';
+import { generateCanvasPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { runQ4W5Tests, type TestResult } from '@/lib/test-runner';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { validateDeployment, type ValidationResult } from '@/lib/pre-deploy-validator';
@@ -102,6 +107,10 @@ export default function AssignmentsPage() {
   const [filter, setFilter] = useState<string>('All');
   const [deployResults, setDeployResults] = useState<Record<string, DeployStatus>>({});
   const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
+  const [testMode, setTestMode] = useState(false);
+  const [testRunning, setTestRunning] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
 
   const toggleForce = (key: string) => {
     setForcedRows((prev) => {
@@ -309,6 +318,13 @@ export default function AssignmentsPage() {
 
     for (const r of targets) {
       try {
+        if (testMode) {
+          const fakeUrl = `https://canvas.test/courses/${r.courseId}/assignments/TEST_${Math.floor(Math.random() * 100000)}`;
+          console.log('[TEST DEPLOY]', r.title, '→', fakeUrl);
+          toast.message(`TEST DEPLOY: ${r.title}`, { description: fakeUrl });
+          results[r.rowKey] = 'DEPLOYED'; ok++;
+          continue;
+        }
         const res = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>(
           'canvas-deploy-assignment',
           {
@@ -447,6 +463,102 @@ export default function AssignmentsPage() {
     return c;
   }, [filtered]);
 
+  // ── Q4W5 DRY-RUN TEST HARNESS ──────────────────────────────
+  const handleRunTests = async () => {
+    if (!config) return;
+    setTestRunning(true);
+    try {
+      const Q = 'Q4';
+      const W = 5;
+      const weekDates = computeWeekDates(Q, W);
+
+      const { data: weekRec } = await supabase
+        .from('weeks').select('id').eq('quarter', Q).eq('week_num', W).maybeSingle();
+      if (!weekRec) {
+        toast.error('No Q4W5 week found in database');
+        setTestRunning(false);
+        return;
+      }
+      const { data: pRows } = await supabase
+        .from('pacing_rows').select('*').eq('week_id', weekRec.id);
+      const rows = pRows || [];
+
+      const built: BuiltAssignment[] = [];
+      for (const subject of SUBJECTS) {
+        for (let dayIdx = 0; dayIdx < DAYS.length; dayIdx++) {
+          const day = DAYS[dayIdx];
+          const row = rows.find((r: any) => r.subject === subject && r.day === day);
+          if (!row || !row.type || row.type === '-' || row.type === 'No Class') continue;
+          if (!row.create_assign) continue;
+
+          const cell: PacingCell = {
+            value: row.in_class || row.lesson_num || '',
+            lessonNum: row.lesson_num || '',
+            isTest: (row.type || '').toLowerCase().includes('test'),
+            isReview: (row.in_class || '').toLowerCase().includes('review'),
+            isNoClass: row.type === '-' || row.type === 'No Class',
+            hint_override: (row as any).hint_override ?? null,
+          };
+
+          if (subject === 'Math') {
+            const items = await expandMathRow(dayIdx, cell, { config, contentMap, weekDates });
+            built.push(...items);
+            continue;
+          }
+          if (subject === 'Reading' && cell.isTest) {
+            const t = await buildAssignmentForCell('Reading', dayIdx, cell,
+              { config, contentMap, weekDates }, { type: 'Test' });
+            if (t) built.push(t);
+            const c = await buildAssignmentForCell('Reading', dayIdx, cell,
+              { config, contentMap, weekDates }, { type: 'Checkout', isSynthetic: true });
+            if (c) built.push(c);
+            continue;
+          }
+          if (subject === 'Spelling' && !cell.isTest) continue;
+          if (subject === 'Language Arts') {
+            const upper = (row.type || '').toUpperCase();
+            if (!upper.includes('CP') && !upper.includes('TEST') &&
+                !upper.includes('CLASSROOM PRACTICE')) continue;
+          }
+          if (subject === 'History' || subject === 'Science') continue;
+
+          const a = await buildAssignmentForCell(subject, dayIdx, cell,
+            { config, contentMap, weekDates });
+          if (a) built.push(a);
+        }
+      }
+
+      const dateRange = `${weekDates[0]} – ${weekDates[4]}`;
+      const quarterColor = (config as any).quarterColors?.[Q] || '#0065a7';
+      const buildPage = (subj: string) => {
+        const sRows: CanvasPageRow[] = rows
+          .filter((r: any) => r.subject === subj || (subj === 'Reading' && r.subject === 'Spelling'))
+          .map((r: any) => ({
+            day: r.day, type: r.type, lesson_num: r.lesson_num,
+            in_class: r.in_class, at_home: r.at_home, canvas_url: r.canvas_url,
+            canvas_assignment_id: r.canvas_assignment_id, object_id: null,
+            subject: r.subject, resources: r.resources,
+          }));
+        return generateCanvasPageHtml({
+          subject: subj === 'Reading' ? 'Reading & Spelling' : subj,
+          rows: sRows, quarter: Q, weekNum: W, dateRange,
+          reminders: '', resources: '', quarterColor, contentMap,
+        });
+      };
+      const pageHtml: Record<string, string> = {
+        Math: buildPage('Math'),
+        Reading: buildPage('Reading'),
+      };
+
+      const r = await runQ4W5Tests(built, pageHtml);
+      setTestResults(r);
+      setTestOpen(true);
+    } catch (e: any) {
+      toast.error('Test run failed', { description: e?.message });
+    }
+    setTestRunning(false);
+  };
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="space-y-6 animate-in fade-in duration-300">
@@ -485,6 +597,21 @@ export default function AssignmentsPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-border">
+              <Switch id="test-mode" checked={testMode} onCheckedChange={setTestMode} />
+              <Label htmlFor="test-mode" className="text-[10px] uppercase tracking-wider cursor-pointer">
+                Test Mode
+              </Label>
+            </div>
+            <Button
+              variant="outline" size="sm"
+              onClick={handleRunTests}
+              disabled={!testMode || testRunning}
+              className="gap-1.5"
+            >
+              {testRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+              Run Q4W5 Tests 🧪
+            </Button>
             <Badge variant="outline" className="text-[9px]">{counts.NEW} NEW</Badge>
             <Badge variant="outline" className="text-[9px]">{counts.UPDATE} UPDATE</Badge>
             <Badge variant="outline" className="text-[9px]">{counts.NO_CHANGE} OK</Badge>
@@ -503,6 +630,17 @@ export default function AssignmentsPage() {
             </Button>
           </div>
         </div>
+
+        {testMode && (
+          <Card className="border-warning bg-warning/10">
+            <CardContent className="py-2.5 flex items-center gap-2">
+              <FlaskConical className="h-4 w-4 text-warning" />
+              <p className="text-xs font-semibold text-warning">
+                🧪 TEST MODE — no Canvas API calls will be made
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {historyRedirect && (
           <Card className="border-warning/30 bg-warning/5">
@@ -706,6 +844,56 @@ export default function AssignmentsPage() {
               : undefined
           }
         />
+
+        <Dialog open={testOpen} onOpenChange={setTestOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-warning" />
+                Q4W5 Test Results
+              </DialogTitle>
+            </DialogHeader>
+            {(() => {
+              const pass = testResults.filter((r) => r.status === 'PASS').length;
+              const fail = testResults.filter((r) => r.status === 'FAIL').length;
+              const warn = testResults.filter((r) => r.status === 'WARN').length;
+              return (
+                <div className="text-sm font-mono mb-3">
+                  <span className="text-success">{pass} passed</span> ·{' '}
+                  <span className="text-destructive">{fail} failed</span> ·{' '}
+                  <span className="text-warning">{warn} warnings</span>
+                </div>
+              );
+            })()}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16 text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Test</TableHead>
+                  <TableHead className="text-xs">Expected</TableHead>
+                  <TableHead className="text-xs">Actual</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {testResults.map((r, i) => (
+                  <TableRow
+                    key={i}
+                    className={
+                      r.status === 'PASS' ? 'bg-success/10' :
+                      r.status === 'FAIL' ? 'bg-destructive/10' :
+                      'bg-warning/10'
+                    }
+                  >
+                    <TableCell className="text-[10px] font-bold">{r.status}</TableCell>
+                    <TableCell className="text-xs">{r.name}</TableCell>
+                    <TableCell className="text-[11px] font-mono text-muted-foreground">{r.expected}</TableCell>
+                    <TableCell className="text-[11px] font-mono">{r.actual}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

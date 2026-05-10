@@ -61,6 +61,7 @@ export default function PageBuilderPage() {
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
   const handleRealtimeEvent = useCallback((event: any) => {
@@ -272,17 +273,28 @@ export default function PageBuilderPage() {
 
     try {
       const contentHash = await sha256Hex(html);
-      const result = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
-        subject,
-        courseId,
-        pageUrl: pageSlug,
-        pageTitle,
-        bodyHtml: html,
-        published: true,
-        setFrontPage: true,
-        weekId: selectedWeekId || null,
-        contentHash,
-      });
+      const result = testMode
+        ? {
+            status: 'DEPLOYED',
+            canvasUrl: `https://canvas.test/courses/${courseId}/pages/${pageSlug}`,
+          } as { status?: string; canvasUrl?: string; error?: string }
+        : await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
+            subject,
+            courseId,
+            pageUrl: pageSlug,
+            pageTitle,
+            bodyHtml: html,
+            published: true,
+            setFrontPage: true,
+            weekId: selectedWeekId || null,
+            contentHash,
+          });
+
+      if (testMode) {
+        console.log('[TEST DEPLOY PAGE]', subject, '→', result.canvasUrl);
+        toast.message(`TEST DEPLOY: ${subject} agenda`, { description: result.canvasUrl });
+      }
+
 
       if (result.status === 'DEPLOYED' || result.status === 'NO_CHANGE') {
         setDeployStatuses((p) => ({ ...p, [subject]: { status: result.status!, canvasUrl: result.canvasUrl } }));
@@ -380,7 +392,19 @@ export default function PageBuilderPage() {
 
         <FullSheetImportDialog onImported={refreshWeeks} />
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-border">
+            <input
+              id="pb-test-mode"
+              type="checkbox"
+              checked={testMode}
+              onChange={(e) => setTestMode(e.target.checked)}
+              className="h-3.5 w-3.5 cursor-pointer"
+            />
+            <label htmlFor="pb-test-mode" className="text-[10px] uppercase tracking-wider cursor-pointer">
+              Test Mode
+            </label>
+          </div>
           <Button
             variant="deploy"
             size="sm"
@@ -393,6 +417,17 @@ export default function PageBuilderPage() {
           </Button>
         </div>
       </div>
+
+      {testMode && (
+        <Card className="border-warning bg-warning/10">
+          <CardContent className="py-2.5 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <p className="text-xs font-semibold text-warning">
+              🧪 TEST MODE — no Canvas API calls will be made
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <SafetyDiffModal
         open={diffOpen}
