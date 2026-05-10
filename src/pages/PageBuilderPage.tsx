@@ -273,17 +273,28 @@ export default function PageBuilderPage() {
 
     try {
       const contentHash = await sha256Hex(html);
-      const result = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
-        subject,
-        courseId,
-        pageUrl: pageSlug,
-        pageTitle,
-        bodyHtml: html,
-        published: true,
-        setFrontPage: true,
-        weekId: selectedWeekId || null,
-        contentHash,
-      });
+      const result = testMode
+        ? {
+            status: 'DEPLOYED',
+            canvasUrl: `https://canvas.test/courses/${courseId}/pages/${pageSlug}`,
+          } as { status?: string; canvasUrl?: string; error?: string }
+        : await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
+            subject,
+            courseId,
+            pageUrl: pageSlug,
+            pageTitle,
+            bodyHtml: html,
+            published: true,
+            setFrontPage: true,
+            weekId: selectedWeekId || null,
+            contentHash,
+          });
+
+      if (testMode) {
+        console.log('[TEST DEPLOY PAGE]', subject, '→', result.canvasUrl);
+        toast.message(`TEST DEPLOY: ${subject} agenda`, { description: result.canvasUrl });
+      }
+
 
       if (result.status === 'DEPLOYED' || result.status === 'NO_CHANGE') {
         setDeployStatuses((p) => ({ ...p, [subject]: { status: result.status!, canvasUrl: result.canvasUrl } }));
