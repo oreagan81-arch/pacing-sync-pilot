@@ -413,7 +413,7 @@ export default function PageBuilderPage() {
         </Select>
 
         {selectedWeek && (
-          <span className="text-sm text-muted-foreground">{selectedWeek.date_range}</span>
+          <span className="text-sm text-muted-foreground">{selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num)}</span>
         )}
 
         <FullSheetImportDialog onImported={refreshWeeks} />
