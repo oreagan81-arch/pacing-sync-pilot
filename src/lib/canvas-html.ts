@@ -326,90 +326,71 @@ export function generateCanvasPageHtml(params: CanvasPageParams): string {
 // ============================================================================
 
 export function generateHomeroomPageHtml(params: HomeroomPageParams): string {
-  const { dateRange, reminders, resources, homeroomNotes, birthdays, upcomingTests } = params;
+  const { dateRange, homeroomNotes, birthdays, reminders, resources } = params;
   const parts: string[] = [];
 
-  // Banner
-  parts.push(
-    `<div style="background: linear-gradient(135deg,#6644bb,#0065a7); color: #fff; padding: 24px; border-radius: 12px; text-align: center;">`,
-  );
-  parts.push(`  <h1 style="margin: 0;">📬 Homeroom Newsletter</h1>`);
-  parts.push(`  <p style="margin: 8px 0 0;">${dateRange}</p>`);
-  parts.push(`</div>`);
+  // Gradient banner
+  parts.push(`<div style="background: linear-gradient(135deg,#6644bb,#0065a7); color: #fff; padding: 24px; border-radius: 12px; text-align: center;">
+  <h1 style="margin: 0;">📬 Homeroom Newsletter</h1>
+  <p style="margin: 8px 0 0;">${dateRange || 'This Week'}</p>
+</div>`);
 
-  // Homeroom Notes
-  if (homeroomNotes && homeroomNotes.trim()) {
-    parts.push(
-      `<div style="margin: 16px 0; padding: 16px; background: #f8f6ff; border-radius: 8px; border-left: 4px solid #6644bb;">`,
-    );
-    parts.push(`  <h3 style="margin: 0 0 8px; color: #6644bb;">📝 Homeroom Notes</h3>`);
-    parts.push(`  <ul>`);
-    for (const line of homeroomNotes.split('\n').map((l) => l.trim()).filter(Boolean)) {
-      parts.push(`    <li>${line}</li>`);
-    }
-    parts.push(`  </ul>`);
-    parts.push(`</div>`);
+  // Homeroom Notes (purple card)
+  if (homeroomNotes?.trim()) {
+    const noteItems = homeroomNotes.split('\n').filter(Boolean)
+      .map((n) => `    <li>${n.trim()}</li>`).join('\n');
+    parts.push(`<div style="margin: 16px 0; padding: 16px; background: #f8f6ff; border-radius: 8px; border-left: 4px solid #6644bb;">
+  <h3 style="margin: 0 0 8px; color: #6644bb;">📝 Homeroom Notes</h3>
+  <ul>
+${noteItems}
+  </ul>
+</div>`);
   }
 
-  // Birthdays
-  if (birthdays && birthdays.trim()) {
-    parts.push(
-      `<div style="margin: 16px 0; padding: 16px; background: #fff8f0; border-radius: 8px; border-left: 4px solid #c87800;">`,
-    );
-    parts.push(`  <h3 style="margin: 0 0 8px; color: #c87800;">🎂 Birthdays&nbsp;🎂</h3>`);
-    parts.push(`  <p style="margin: 0;">Happy Birthday to:</p>`);
-    for (const line of birthdays.split('\n').map((l) => l.trim()).filter(Boolean)) {
-      parts.push(`  <p style="margin: 0;">${line}</p>`);
-    }
-    parts.push(`</div>`);
+  // Birthdays (orange card)
+  if (birthdays?.trim()) {
+    const bdLines = birthdays.split('\n').filter(Boolean)
+      .map((b) => `  <p style="margin: 0;">${b.trim()}</p>`).join('\n');
+    parts.push(`<div style="margin: 16px 0; padding: 16px; background: #fff8f0; border-radius: 8px; border-left: 4px solid #c87800;">
+  <h3 style="margin: 0 0 8px; color: #c87800;">🎂 Birthdays&nbsp;🎂</h3>
+  <p style="margin: 0;">Happy Birthday to:</p>
+${bdLines}
+</div>`);
   }
 
-  // Mark Your Calendars (from upcomingTests, fall back to reminders)
-  const calendarLines: string[] = [];
-  if (upcomingTests && upcomingTests.length > 0) {
-    for (const t of upcomingTests) {
-      const v = t.trim();
-      if (v) calendarLines.push(v);
-    }
-  } else if (reminders && reminders.trim()) {
-    for (const line of reminders.split('\n').map((l) => l.trim()).filter(Boolean)) {
-      calendarLines.push(line);
-    }
-  }
-  if (calendarLines.length > 0) {
-    parts.push(`<div style="margin: 16px 0;">`);
-    parts.push(`  <h3 style="color: #6644bb; border-bottom: 2px solid #6644bb; padding-bottom: 4px;">Mark Your Calendars</h3>`);
-    for (const line of calendarLines) {
-      parts.push(`  <div dir="ltr">${line}</div>`);
-    }
-    parts.push(`</div>`);
+  // Mark Your Calendars (from reminders field)
+  if (reminders?.trim()) {
+    const calLines = reminders.split('\n').filter(Boolean)
+      .map((r) => `  <div dir="ltr">${r.trim()}</div>`).join('\n');
+    parts.push(`<div style="margin: 16px 0;">
+  <h3 style="color: #6644bb; border-bottom: 2px solid #6644bb; padding-bottom: 4px;">Mark Your Calendars</h3>
+${calLines}
+</div>`);
   }
 
-  // Links / Resources
-  if (resources && resources.trim()) {
-    parts.push(`<div style="margin: 16px 0;">`);
-    for (const line of resources.split('\n').map((l) => l.trim()).filter(Boolean)) {
-      const parsed = parseResourceLine(line);
-      for (const r of parsed) {
-        if (r.url) {
-          parts.push(`  <p dir="ltr"><a href="${r.url}" target="_blank" rel="noopener">${r.label || r.url}</a></p>`);
-        } else {
-          parts.push(`  <p dir="ltr">${r.label}</p>`);
-        }
+  // Links/Resources
+  if (resources?.trim()) {
+    const linkLines = resources.split('\n').filter(Boolean).map((r) => {
+      const pipe = r.split('|').map((s) => s.trim());
+      if (pipe.length === 2 && pipe[1].startsWith('http')) {
+        return `  <p dir="ltr"><a href="${pipe[1]}" target="_blank" rel="noopener">${pipe[0]}</a></p>`;
       }
-    }
-    parts.push(`</div>`);
+      if (r.trim().startsWith('http')) {
+        return `  <p dir="ltr"><a href="${r.trim()}" target="_blank">${r.trim()}</a></p>`;
+      }
+      return `  <p dir="ltr">${r.trim()}</p>`;
+    }).join('\n');
+    parts.push(`<div style="margin: 16px 0;">
+${linkLines}
+</div>`);
   }
 
   // Footer
-  parts.push(
-    `<div style="text-align: center; margin-top: 24px; padding: 16px; color: #888; font-size: 12px;">`,
-  );
-  parts.push(`  Thales Academy Grade 4A — Mr. Reagan`);
-  parts.push(`</div>`);
+  parts.push(`<div style="text-align: center; margin-top: 24px; padding: 16px; color: #888; font-size: 12px;">Thales Academy Grade 4A &mdash; Mr. Reagan</div>`);
 
   return parts.join('\n');
 }
+
 
 // Silence unused-import warning if getCourseId is unused elsewhere in this file.
 void getCourseId;
