@@ -255,6 +255,20 @@ export default function NewsletterPage() {
                 <Input value={birthdays} onChange={e => setBirthdays(e.target.value)} placeholder="Names..." />
               </div>
 
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Mark Your Calendars</Label>
+                <Textarea
+                  placeholder={"May 8th: Progress Reports\nMay 11th: CLT Testing begins\nMay 19th (6:00): Spring Performance"}
+                  value={calendarEvents}
+                  onChange={(e) => setCalendarEvents(e.target.value)}
+                  rows={5}
+                  className="text-sm font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  One event per line. Will appear in the "Mark Your Calendars" section.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-muted-foreground uppercase">Extra Sections</label>
