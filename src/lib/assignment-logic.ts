@@ -171,7 +171,7 @@ export interface BuildAssignmentInput {
   subject: string;
   type: string;
   lessonNum: string | null;
-  prefix: string;          // e.g. "SM5:", "RM4:", "ELA4A:"
+  prefix: string;          // e.g. "SM5:", "RM4:", "ELA4:"
   /** ISO date "YYYY-MM-DD" for the day this assignment is due */
   date: string;
   description?: string;
