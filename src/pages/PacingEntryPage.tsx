@@ -587,7 +587,15 @@ export default function PacingEntryPage({
         in_class: row.in_class || '',
         at_home: row.at_home || '',
         resources: '',
-        create_assign: row.type !== '-' && row.type !== 'No Class',
+        create_assign: (() => {
+          if (row.type === '-' || row.type === 'No Class') return false;
+          if (row.subject === 'Spelling' && row.type !== 'Test') return false;
+          if (row.subject === 'History' || row.subject === 'Science') return false;
+          if (row.subject === 'Language Arts') {
+            return ['CP', 'Classroom Practice', 'Test'].includes(row.type || '');
+          }
+          return true;
+        })(),
         hint_override: null,
       };
     }
