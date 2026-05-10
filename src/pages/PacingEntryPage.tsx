@@ -453,8 +453,18 @@ export default function PacingEntryPage({
             type: d.type || null,
             lesson_num: d.lesson_num || null,
             in_class: buildInClass(subj, d),
-            at_home: isFriday ? null : buildAtHome(subj, d) || null,
-            resources: d.resources || null,
+            at_home: buildAtHome(subj, d, isFriday),
+            resources: (() => {
+              const refs = buildResourceRefs(subj, d);
+              if (!refs.length) return d.resources || null;
+              const matched = contentMap
+                .filter((cm) => refs.includes(cm.lesson_ref))
+                .map((cm) => (cm.canvas_url
+                  ? `${cm.canonical_name} | ${cm.canvas_url}`
+                  : cm.canonical_name))
+                .join('\n');
+              return matched || d.resources || null;
+            })(),
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
             hint_override: d.hint_override ?? null,
           };
