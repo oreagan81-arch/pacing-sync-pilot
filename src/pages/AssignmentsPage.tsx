@@ -844,6 +844,56 @@ export default function AssignmentsPage() {
               : undefined
           }
         />
+
+        <Dialog open={testOpen} onOpenChange={setTestOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-warning" />
+                Q4W5 Test Results
+              </DialogTitle>
+            </DialogHeader>
+            {(() => {
+              const pass = testResults.filter((r) => r.status === 'PASS').length;
+              const fail = testResults.filter((r) => r.status === 'FAIL').length;
+              const warn = testResults.filter((r) => r.status === 'WARN').length;
+              return (
+                <div className="text-sm font-mono mb-3">
+                  <span className="text-success">{pass} passed</span> ·{' '}
+                  <span className="text-destructive">{fail} failed</span> ·{' '}
+                  <span className="text-warning">{warn} warnings</span>
+                </div>
+              );
+            })()}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16 text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Test</TableHead>
+                  <TableHead className="text-xs">Expected</TableHead>
+                  <TableHead className="text-xs">Actual</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {testResults.map((r, i) => (
+                  <TableRow
+                    key={i}
+                    className={
+                      r.status === 'PASS' ? 'bg-success/10' :
+                      r.status === 'FAIL' ? 'bg-destructive/10' :
+                      'bg-warning/10'
+                    }
+                  >
+                    <TableCell className="text-[10px] font-bold">{r.status}</TableCell>
+                    <TableCell className="text-xs">{r.name}</TableCell>
+                    <TableCell className="text-[11px] font-mono text-muted-foreground">{r.expected}</TableCell>
+                    <TableCell className="text-[11px] font-mono">{r.actual}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
