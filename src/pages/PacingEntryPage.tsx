@@ -123,9 +123,11 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+// ── AUTO IN_CLASS ──────────────────────────────────────────
 function buildInClass(subject: string, d: DayData): string | null {
   const explicit = (d.in_class || '').trim();
-  if (explicit && !/^\d+$/.test(explicit)) return explicit;
+  // Keep explicit values that aren't bare numbers
+  if (explicit && !/^\d+(\.\d+)?$/.test(explicit)) return explicit;
   const n = (d.lesson_num || '').trim();
   if (!n) return explicit || null;
   switch (subject) {
@@ -135,7 +137,7 @@ function buildInClass(subject: string, d: DayData): string | null {
     case 'Language Arts': {
       const dot = n.match(/^(\d+)\.(\d+)$/);
       if (dot) return `Chapter ${dot[1]}, Lesson ${dot[2]}`;
-      return `Chapter ${n}`;
+      return explicit || `Chapter ${n}`;
     }
     case 'History':
     case 'Science': return explicit || `Chapter ${n}`;
@@ -143,26 +145,81 @@ function buildInClass(subject: string, d: DayData): string | null {
   }
 }
 
-function buildAtHome(subject: string, d: DayData): string {
+// ── AUTO AT_HOME ────────────────────────────────────────────
+function buildAtHome(subject: string, d: DayData, isFriday: boolean): string | null {
+  if (isFriday) return null;
   const explicit = (d.at_home || '').trim();
   if (explicit) return explicit;
-  if (['History', 'Science', 'Language Arts', 'Spelling'].includes(subject)) return '';
+  // No at_home for these (History, Science, ELA, Spelling handled via page)
+  if (['History', 'Science', 'Language Arts', 'Spelling'].includes(subject)) return null;
   const type = (d.type || '').toLowerCase();
   if (!type || type === '-' || type === 'no class' || type.includes('test') ||
-      type.includes('review') || type.includes('study guide')) return '';
+      type.includes('review') || type.includes('study guide')) return null;
   const n = (d.lesson_num || '').trim();
-  if (!n) return '';
+  if (!n) return null;
   if (subject === 'Math') {
-    if (d.hint_override === 'evens') return `Lesson ${n} Evens`;
-    if (d.hint_override === 'odds') return `Lesson ${n} Odds`;
-    if (d.hint_override === 'none') return `Lesson ${n}`;
+    const hint = d.hint_override;
+    if (hint === 'none') return `Lesson ${n}`;
+    if (hint === 'evens') return `Lesson ${n} Evens`;
+    if (hint === 'odds') return `Lesson ${n} Odds`;
     const num = parseInt(n);
-    const parity = isNaN(num) ? '' : num % 2 === 0 ? ' Evens' : ' Odds';
-    return `Lesson ${n}${parity}`;
+    return `Lesson ${n} ${isNaN(num) ? '' : num % 2 === 0 ? 'Evens' : 'Odds'}`.trim();
   }
   if (subject === 'Reading') return `Lesson ${n} Workbook and Comprehension`;
-  return '';
+  return null;
 }
+
+// ── AUTO RESOURCES from content_map ────────────────────────
+function buildResourceRefs(subject: string, d: DayData): string[] {
+  const n = (d.lesson_num || '').trim();
+  const num = parseInt(n);
+  const refs: string[] = [];
+  if (!n || isNaN(num)) return refs;
+  const pad3 = String(num).padStart(3, '0');
+  const pad2 = String(num).padStart(2, '0');
+  if (subject === 'Math' && d.type !== 'Test') {
+    refs.push('HW_Evens', 'HW_Odds', 'Math_Textbook', `Math_Lesson_${pad3}`);
+    const POWER_UP: Record<number, string> = {
+      1:'A',2:'A',3:'A',4:'A',5:'A',6:'A',7:'A',8:'A',
+      9:'B',10:'B',11:'B',12:'B',13:'B',14:'B',15:'B',
+      16:'C',17:'C',18:'C',19:'C',20:'D',21:'D',
+      22:'F',23:'E',24:'F',25:'D',26:'F',27:'F',28:'E',29:'F',
+      30:'D',31:'F',32:'E',33:'F',34:'D',35:'F',36:'E',37:'F',38:'D',39:'F',
+      40:'E',41:'F',42:'D',43:'E',44:'F',45:'D',46:'F',47:'F',
+      48:'G',49:'G',50:'F',51:'G',52:'F',53:'F',54:'G',55:'F',56:'G',
+      57:'F',58:'G',59:'F',60:'G',61:'F',62:'G',63:'F',64:'F',
+      65:'C',66:'F',67:'G',68:'E',69:'F',70:'G',71:'C',72:'D',
+      73:'F',74:'G',75:'C',76:'H',77:'H',78:'H',79:'H',80:'H',
+      81:'H',82:'H',83:'H',84:'H',85:'H',86:'H',87:'H',88:'H',
+      89:'F',90:'F',91:'I',92:'I',93:'I',94:'I',95:'I',96:'I',
+      97:'I',98:'I',99:'I',100:'I',101:'J',102:'J',103:'J',104:'J',
+      105:'J',106:'J',107:'J',108:'J',109:'J',110:'J',
+      111:'K',112:'K',113:'K',114:'K',115:'K',116:'K',
+      117:'K',118:'K',119:'K',120:'K',
+    };
+    if (POWER_UP[num]) refs.push(`Math_PowerUp_${POWER_UP[num]}`);
+    const rStart = Math.floor((num - 1) / 10) * 10 + 1;
+    refs.push(`Math_Reteaching_L${String(rStart).padStart(3, '0')}`);
+  }
+  if (subject === 'Math' && d.type === 'Test') {
+    refs.push(`Math_StudyGuide_${pad2}_Blank`, `Math_StudyGuide_${pad2}_Completed`);
+  }
+  if (subject === 'Reading') {
+    const chunk = Math.floor((num - 1) / 25) * 25 + 1;
+    refs.push(
+      `Reading_Book_L${String(chunk).padStart(3, '0')}`,
+      'Reading_Workbook_Part1', 'Reading_Workbook_Part2',
+      'Reading_Glossary_A', 'Reading_Glossary_B', 'Reading_Glossary_C',
+      'Spelling_Master_List',
+    );
+  }
+  if (subject === 'Language Arts' &&
+      (d.type === 'CP' || d.type === 'Classroom Practice')) {
+    refs.push(`Classroom_Practice_${pad3}`);
+  }
+  return refs;
+}
+
 
 function buildAutoReminders(weekData: WeekData): string {
   const lines: string[] = [];
@@ -208,7 +265,7 @@ const POWER_UP_MAP: Record<number, string> = {
   118:'K',119:'K',120:'K',
 };
 
-function buildResourceRefs(rows: any[]): Set<string> {
+function buildAllResourceRefs(rows: any[]): Set<string> {
   const refs = new Set<string>();
   for (const row of rows) {
     const n = row.lesson_num;
@@ -396,8 +453,18 @@ export default function PacingEntryPage({
             type: d.type || null,
             lesson_num: d.lesson_num || null,
             in_class: buildInClass(subj, d),
-            at_home: isFriday ? null : buildAtHome(subj, d) || null,
-            resources: d.resources || null,
+            at_home: buildAtHome(subj, d, isFriday),
+            resources: (() => {
+              const refs = buildResourceRefs(subj, d);
+              if (!refs.length) return d.resources || null;
+              const matched = contentMap
+                .filter((cm) => refs.includes(cm.lesson_ref))
+                .map((cm) => (cm.canvas_url
+                  ? `${cm.canonical_name} | ${cm.canvas_url}`
+                  : cm.canonical_name))
+                .join('\n');
+              return matched || d.resources || null;
+            })(),
             create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
             hint_override: d.hint_override ?? null,
           };
@@ -478,7 +545,7 @@ export default function PacingEntryPage({
       if (weekData2?.reminders) setReminders(weekData2.reminders);
       else setReminders(buildAutoReminders(newData));
 
-      const refs = buildResourceRefs(rows);
+      const refs = buildAllResourceRefs(rows);
       const matched = contentMap.filter((r) => refs.has(r.lesson_ref)).map((r) => r.canonical_name).join('\n');
 
       if (weekData2?.resources) setResources(weekData2.resources);
