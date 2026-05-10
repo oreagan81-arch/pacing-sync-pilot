@@ -604,15 +604,32 @@ export default function PageBuilderPage() {
                     <p className="text-sm">No data for this subject/week.</p>
                   </div>
                 ) : previewMode === 'preview' ? (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-3 uppercase tracking-wider font-semibold">
-                      Mobile preview \u2014 sandboxed exact HTML being deployed
-                    </p>
+                  <div className="border rounded-lg overflow-hidden bg-white">
+                    <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <div className="w-3 h-3 rounded-full bg-red-400" />
+                        <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                        <div className="w-3 h-3 rounded-full bg-green-400" />
+                      </div>
+                      <span className="text-xs text-muted-foreground flex-1 text-center">
+                        Canvas Preview — {activeSubject} | {selectedWeek?.quarter} Week {selectedWeek?.week_num}
+                      </span>
+                    </div>
                     <iframe
+                      key={generatedHtml}
+                      srcDoc={`<!DOCTYPE html><html><head>
+                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                        <style>
+                          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                                 padding: 24px; margin: 0; background: white; }
+                          .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
+                          .kl_solid_border { display: block; }
+                        </style>
+                      </head><body>${generatedHtml}</body></html>`}
+                      className="w-full border-0"
+                      style={{ height: '700px' }}
+                      sandbox="allow-same-origin"
                       title="Canvas page preview"
-                      sandbox=""
-                      srcDoc={`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>body{font-family:'Helvetica Neue',Arial,sans-serif;margin:0;padding:16px;background:#fff;color:#222;line-height:1.5}h2,h3,h4{margin:0}h3{padding:10px 16px;border-radius:4px 4px 0 0;font-size:18px}h2{padding:14px;border-radius:4px;font-size:22px}.kl_subtitle{text-align:center;color:#666;font-style:italic;margin:8px 0 16px}.kl_wrapper>div{margin-bottom:18px;border:1px solid #e3e3e3;border-radius:6px;overflow:hidden}.kl_wrapper>div>*:not(h2):not(h3){padding-left:16px;padding-right:16px}p{margin:8px 0}a{color:#0065a7}img{max-width:100%;height:auto}</style></head><body>${generatedHtml}</body></html>`}
-                      style={{ width: '100%', minHeight: '600px', border: '1px solid hsl(var(--border))', borderRadius: '6px', background: '#fff' }}
                     />
                   </div>
                 ) : (
