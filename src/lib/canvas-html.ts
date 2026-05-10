@@ -307,6 +307,15 @@ export function generateCanvasPageHtml(params: CanvasPageParams): string {
           atHomeFragments.push(`      <p><strong>${linked}</strong></p>`);
         }
       }
+      // Append "Study Spelling Words" on non-Friday, non-Spelling-Test days for Reading page
+      if (row.subject === 'Reading' && !isFriday) {
+        const hasSpellingTest = dayRows.some(
+          r => r.subject === 'Spelling' && (r.type || '').toLowerCase().includes('test')
+        );
+        if (!hasSpellingTest && atHomeFragments.length > 0) {
+          atHomeFragments.push(`      <p>Study Spelling Words</p>`);
+        }
+      }
       if (atHomeFragments.length > 0) {
         parts.push(`      <h4 ${KL_H4}><strong>${atHomeLabel(row.subject)}</strong></h4>`);
         parts.push(atHomeFragments.join('\n'));
