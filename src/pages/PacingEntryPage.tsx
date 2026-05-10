@@ -545,7 +545,7 @@ export default function PacingEntryPage({
       if (weekData2?.reminders) setReminders(weekData2.reminders);
       else setReminders(buildAutoReminders(newData));
 
-      const refs = buildResourceRefs(rows);
+      const refs = buildAllResourceRefs(rows);
       const matched = contentMap.filter((r) => refs.has(r.lesson_ref)).map((r) => r.canonical_name).join('\n');
 
       if (weekData2?.resources) setResources(weekData2.resources);
