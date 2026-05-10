@@ -83,14 +83,32 @@ export function mergeReadingSpellingRows<T extends MergeableRow>(rows: T[]): T[]
     const sameDay = dayRows.filter((r) => r.day === reading.day);
     const others = sameDay.filter((r) => r !== reading);
 
-    const inClass = others.reduce<string | null>(
-      (acc, r) => concatWithBr(acc, r.in_class),
-      reading.in_class,
-    );
-    const atHome = others.reduce<string | null>(
-      (acc, r) => concatWithBr(acc, r.at_home),
-      reading.at_home,
-    );
+    // In Class: bold subject labels
+    const readingIC = reading.in_class?.trim()
+      ? `<strong>Reading:</strong> ${reading.in_class.trim()}`
+      : null;
+    const spellingIC = others
+      .map(r => r.in_class?.trim()
+        ? `<strong>Spelling:</strong> ${r.in_class.trim()}`
+        : null)
+      .filter(Boolean).join('<br/>') || null;
+    const inClass = [readingIC, spellingIC].filter(Boolean).join('<br/>') || null;
+
+    // At Home: Spelling first, Reading second, both bold
+    const spellingAH = others
+      .map(r => {
+        if (!r.in_class && !r.at_home && !r.lesson_num) return null;
+        const content = r.at_home?.trim() ||
+          (r.lesson_num ? `Spelling Lesson ${r.lesson_num}` : null);
+        return content ? `<strong>Spelling:</strong> ${content}` : null;
+      })
+      .filter(Boolean).join('<br/>') || null;
+    const readingAH = (() => {
+      const content = reading.at_home?.trim() ||
+        (reading.lesson_num ? `Lesson ${reading.lesson_num} Workbook and Comprehension` : null);
+      return content ? `<strong>Reading:</strong> ${content}` : null;
+    })();
+    const atHome = [spellingAH, readingAH].filter(Boolean).join('<br/>') || null;
     // Spread reading FIRST, then explicitly re-assert lesson_num + day from
     // the Reading row so no later spread/field can overwrite them.
     merged.push({
