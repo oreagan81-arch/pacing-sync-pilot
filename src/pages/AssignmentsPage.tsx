@@ -9,13 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Rocket, Loader2, AlertCircle, ArrowRightLeft, ShieldCheck,
-  CheckCircle2, ChevronDown, Eye, SkipForward,
+  CheckCircle2, ChevronDown, Eye, SkipForward, FlaskConical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSystemStore, type PacingCell } from '@/store/useSystemStore';
@@ -30,6 +33,8 @@ import {
   formatDueET,
   type BuiltAssignment,
 } from '@/lib/assignment-build';
+import { generateCanvasPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { runQ4W5Tests, type TestResult } from '@/lib/test-runner';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { validateDeployment, type ValidationResult } from '@/lib/pre-deploy-validator';
