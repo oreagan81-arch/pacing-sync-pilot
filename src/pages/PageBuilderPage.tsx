@@ -25,6 +25,32 @@ import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImport
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
+const WEEK_STARTS: Record<string, string> = {
+  'Q1-1':'2025-08-18','Q1-2':'2025-08-25','Q1-3':'2025-09-01',
+  'Q1-4':'2025-09-08','Q1-5':'2025-09-15','Q1-6':'2025-09-22',
+  'Q1-7':'2025-09-29','Q1-8':'2025-10-06','Q1-9':'2025-10-13',
+  'Q2-1':'2025-10-27','Q2-2':'2025-11-03','Q2-3':'2025-11-10',
+  'Q2-4':'2025-11-17','Q2-5':'2025-11-24','Q2-6':'2025-12-01',
+  'Q2-7':'2025-12-08','Q2-8':'2025-12-15','Q2-9':'2025-12-22',
+  'Q3-1':'2026-01-05','Q3-2':'2026-01-12','Q3-3':'2026-01-20',
+  'Q3-4':'2026-01-26','Q3-5':'2026-02-02','Q3-6':'2026-02-09',
+  'Q3-7':'2026-02-16','Q3-8':'2026-02-23','Q3-9':'2026-03-02',
+  'Q4-1':'2026-03-23','Q4-2':'2026-03-30','Q4-3':'2026-04-06',
+  'Q4-4':'2026-04-13','Q4-5':'2026-04-27','Q4-6':'2026-05-04',
+  'Q4-7':'2026-05-11','Q4-8':'2026-05-18','Q4-9':'2026-05-26',
+};
+
+function deriveDateRange(quarter: string, weekNum: number): string {
+  const key = `${quarter}-${weekNum}`;
+  const start = WEEK_STARTS[key];
+  if (!start) return '';
+  const [y, m, d] = start.split('-').map(Number);
+  const mon = new Date(y, m - 1, d);
+  const fri = new Date(y, m - 1, d + 4);
+  const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(mon)}–${fmt(fri)}, ${y}`;
+}
+
 // SHA-256 of an HTML string → hex digest. Used for hash-based deploy skip.
 async function sha256Hex(input: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
@@ -146,7 +172,7 @@ export default function PageBuilderPage() {
       return generateHomeroomPageHtml({
         weekNum: selectedWeek.week_num,
         quarter: selectedWeek.quarter,
-        dateRange: selectedWeek.date_range || '',
+        dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
         reminders: selectedWeek.reminders || '',
         resources: selectedWeek.resources || '',
@@ -164,7 +190,7 @@ export default function PageBuilderPage() {
         activeSubject: activeHs as 'History' | 'Science',
         weekNum: selectedWeek.week_num,
         quarter: selectedWeek.quarter,
-        dateRange: selectedWeek.date_range || '',
+        dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
       });
     }
@@ -175,7 +201,7 @@ export default function PageBuilderPage() {
       rows: subjectRows,
       quarter: selectedWeek.quarter,
       weekNum: selectedWeek.week_num,
-      dateRange: selectedWeek.date_range || '',
+      dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
       reminders: selectedWeek.reminders || '',
       resources: selectedWeek.resources || '',
       quarterColor,
@@ -216,7 +242,7 @@ export default function PageBuilderPage() {
       html = generateHomeroomPageHtml({
         weekNum: selectedWeek.week_num,
         quarter: selectedWeek.quarter,
-        dateRange: selectedWeek.date_range || '',
+        dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
         reminders: selectedWeek.reminders || '',
         resources: selectedWeek.resources || '',
@@ -237,7 +263,7 @@ export default function PageBuilderPage() {
           activeSubject: activeHs as 'History' | 'Science',
           weekNum: selectedWeek.week_num,
           quarter: selectedWeek.quarter,
-          dateRange: selectedWeek.date_range || '',
+          dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
           quarterColor,
         });
       } else {
@@ -255,7 +281,7 @@ export default function PageBuilderPage() {
           rows: sRows,
           quarter: selectedWeek.quarter,
           weekNum: selectedWeek.week_num,
-          dateRange: selectedWeek.date_range || '',
+          dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
           reminders: selectedWeek.reminders || '',
           resources: selectedWeek.resources || '',
           quarterColor,
@@ -387,7 +413,7 @@ export default function PageBuilderPage() {
         </Select>
 
         {selectedWeek && (
-          <span className="text-sm text-muted-foreground">{selectedWeek.date_range}</span>
+          <span className="text-sm text-muted-foreground">{selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num)}</span>
         )}
 
         <FullSheetImportDialog onImported={refreshWeeks} />
@@ -578,15 +604,32 @@ export default function PageBuilderPage() {
                     <p className="text-sm">No data for this subject/week.</p>
                   </div>
                 ) : previewMode === 'preview' ? (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-3 uppercase tracking-wider font-semibold">
-                      Mobile preview \u2014 sandboxed exact HTML being deployed
-                    </p>
+                  <div className="border rounded-lg overflow-hidden bg-white">
+                    <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <div className="w-3 h-3 rounded-full bg-red-400" />
+                        <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                        <div className="w-3 h-3 rounded-full bg-green-400" />
+                      </div>
+                      <span className="text-xs text-muted-foreground flex-1 text-center">
+                        Canvas Preview — {activeSubject} | {selectedWeek?.quarter} Week {selectedWeek?.week_num}
+                      </span>
+                    </div>
                     <iframe
+                      key={generatedHtml}
+                      srcDoc={`<!DOCTYPE html><html><head>
+                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                        <style>
+                          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                                 padding: 24px; margin: 0; background: white; }
+                          .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
+                          .kl_solid_border { display: block; }
+                        </style>
+                      </head><body>${generatedHtml}</body></html>`}
+                      className="w-full border-0"
+                      style={{ height: '700px' }}
+                      sandbox="allow-same-origin"
                       title="Canvas page preview"
-                      sandbox=""
-                      srcDoc={`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>body{font-family:'Helvetica Neue',Arial,sans-serif;margin:0;padding:16px;background:#fff;color:#222;line-height:1.5}h2,h3,h4{margin:0}h3{padding:10px 16px;border-radius:4px 4px 0 0;font-size:18px}h2{padding:14px;border-radius:4px;font-size:22px}.kl_subtitle{text-align:center;color:#666;font-style:italic;margin:8px 0 16px}.kl_wrapper>div{margin-bottom:18px;border:1px solid #e3e3e3;border-radius:6px;overflow:hidden}.kl_wrapper>div>*:not(h2):not(h3){padding-left:16px;padding-right:16px}p{margin:8px 0}a{color:#0065a7}img{max-width:100%;height:auto}</style></head><body>${generatedHtml}</body></html>`}
-                      style={{ width: '100%', minHeight: '600px', border: '1px solid hsl(var(--border))', borderRadius: '6px', background: '#fff' }}
                     />
                   </div>
                 ) : (
