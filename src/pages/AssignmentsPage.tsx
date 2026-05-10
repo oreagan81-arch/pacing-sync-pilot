@@ -463,6 +463,102 @@ export default function AssignmentsPage() {
     return c;
   }, [filtered]);
 
+  // ── Q4W5 DRY-RUN TEST HARNESS ──────────────────────────────
+  const handleRunTests = async () => {
+    if (!config) return;
+    setTestRunning(true);
+    try {
+      const Q = 'Q4';
+      const W = 5;
+      const weekDates = computeWeekDates(Q, W);
+
+      const { data: weekRec } = await supabase
+        .from('weeks').select('id').eq('quarter', Q).eq('week_num', W).maybeSingle();
+      if (!weekRec) {
+        toast.error('No Q4W5 week found in database');
+        setTestRunning(false);
+        return;
+      }
+      const { data: pRows } = await supabase
+        .from('pacing_rows').select('*').eq('week_id', weekRec.id);
+      const rows = pRows || [];
+
+      const built: BuiltAssignment[] = [];
+      for (const subject of SUBJECTS) {
+        for (let dayIdx = 0; dayIdx < DAYS.length; dayIdx++) {
+          const day = DAYS[dayIdx];
+          const row = rows.find((r: any) => r.subject === subject && r.day === day);
+          if (!row || !row.type || row.type === '-' || row.type === 'No Class') continue;
+          if (!row.create_assign) continue;
+
+          const cell: PacingCell = {
+            value: row.in_class || row.lesson_num || '',
+            lessonNum: row.lesson_num || '',
+            isTest: (row.type || '').toLowerCase().includes('test'),
+            isReview: (row.in_class || '').toLowerCase().includes('review'),
+            isNoClass: row.type === '-' || row.type === 'No Class',
+            hint_override: (row as any).hint_override ?? null,
+          };
+
+          if (subject === 'Math') {
+            const items = await expandMathRow(dayIdx, cell, { config, contentMap, weekDates });
+            built.push(...items);
+            continue;
+          }
+          if (subject === 'Reading' && cell.isTest) {
+            const t = await buildAssignmentForCell('Reading', dayIdx, cell,
+              { config, contentMap, weekDates }, { type: 'Test' });
+            if (t) built.push(t);
+            const c = await buildAssignmentForCell('Reading', dayIdx, cell,
+              { config, contentMap, weekDates }, { type: 'Checkout', isSynthetic: true });
+            if (c) built.push(c);
+            continue;
+          }
+          if (subject === 'Spelling' && !cell.isTest) continue;
+          if (subject === 'Language Arts') {
+            const upper = (row.type || '').toUpperCase();
+            if (!upper.includes('CP') && !upper.includes('TEST') &&
+                !upper.includes('CLASSROOM PRACTICE')) continue;
+          }
+          if (subject === 'History' || subject === 'Science') continue;
+
+          const a = await buildAssignmentForCell(subject, dayIdx, cell,
+            { config, contentMap, weekDates });
+          if (a) built.push(a);
+        }
+      }
+
+      const dateRange = `${weekDates[0]} – ${weekDates[4]}`;
+      const quarterColor = (config as any).quarterColors?.[Q] || '#0065a7';
+      const buildPage = (subj: string) => {
+        const sRows: CanvasPageRow[] = rows
+          .filter((r: any) => r.subject === subj || (subj === 'Reading' && r.subject === 'Spelling'))
+          .map((r: any) => ({
+            day: r.day, type: r.type, lesson_num: r.lesson_num,
+            in_class: r.in_class, at_home: r.at_home, canvas_url: r.canvas_url,
+            canvas_assignment_id: r.canvas_assignment_id, object_id: null,
+            subject: r.subject, resources: r.resources,
+          }));
+        return generateCanvasPageHtml({
+          subject: subj === 'Reading' ? 'Reading & Spelling' : subj,
+          rows: sRows, quarter: Q, weekNum: W, dateRange,
+          reminders: '', resources: '', quarterColor, contentMap,
+        });
+      };
+      const pageHtml: Record<string, string> = {
+        Math: buildPage('Math'),
+        Reading: buildPage('Reading'),
+      };
+
+      const r = await runQ4W5Tests(built, pageHtml);
+      setTestResults(r);
+      setTestOpen(true);
+    } catch (e: any) {
+      toast.error('Test run failed', { description: e?.message });
+    }
+    setTestRunning(false);
+  };
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="space-y-6 animate-in fade-in duration-300">
