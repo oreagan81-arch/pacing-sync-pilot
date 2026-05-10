@@ -597,6 +597,21 @@ export default function AssignmentsPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-border">
+              <Switch id="test-mode" checked={testMode} onCheckedChange={setTestMode} />
+              <Label htmlFor="test-mode" className="text-[10px] uppercase tracking-wider cursor-pointer">
+                Test Mode
+              </Label>
+            </div>
+            <Button
+              variant="outline" size="sm"
+              onClick={handleRunTests}
+              disabled={!testMode || testRunning}
+              className="gap-1.5"
+            >
+              {testRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+              Run Q4W5 Tests 🧪
+            </Button>
             <Badge variant="outline" className="text-[9px]">{counts.NEW} NEW</Badge>
             <Badge variant="outline" className="text-[9px]">{counts.UPDATE} UPDATE</Badge>
             <Badge variant="outline" className="text-[9px]">{counts.NO_CHANGE} OK</Badge>
@@ -615,6 +630,17 @@ export default function AssignmentsPage() {
             </Button>
           </div>
         </div>
+
+        {testMode && (
+          <Card className="border-warning bg-warning/10">
+            <CardContent className="py-2.5 flex items-center gap-2">
+              <FlaskConical className="h-4 w-4 text-warning" />
+              <p className="text-xs font-semibold text-warning">
+                🧪 TEST MODE — no Canvas API calls will be made
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {historyRedirect && (
           <Card className="border-warning/30 bg-warning/5">
