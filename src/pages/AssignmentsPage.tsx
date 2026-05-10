@@ -318,6 +318,13 @@ export default function AssignmentsPage() {
 
     for (const r of targets) {
       try {
+        if (testMode) {
+          const fakeUrl = `https://canvas.test/courses/${r.courseId}/assignments/TEST_${Math.floor(Math.random() * 100000)}`;
+          console.log('[TEST DEPLOY]', r.title, '→', fakeUrl);
+          toast.message(`TEST DEPLOY: ${r.title}`, { description: fakeUrl });
+          results[r.rowKey] = 'DEPLOYED'; ok++;
+          continue;
+        }
         const res = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>(
           'canvas-deploy-assignment',
           {
