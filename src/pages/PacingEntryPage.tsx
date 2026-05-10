@@ -265,7 +265,7 @@ const POWER_UP_MAP: Record<number, string> = {
   118:'K',119:'K',120:'K',
 };
 
-function buildResourceRefs(rows: any[]): Set<string> {
+function buildAllResourceRefs(rows: any[]): Set<string> {
   const refs = new Set<string>();
   for (const row of rows) {
     const n = row.lesson_num;
