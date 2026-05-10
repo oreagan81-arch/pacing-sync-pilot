@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
 import { callEdge } from '@/lib/edge';
+import { Label } from '@/components/ui/label';
+import { generateHomeroomPageHtml } from '@/lib/canvas-html';
 
 interface Newsletter {
   id: string;
@@ -33,6 +35,7 @@ export default function NewsletterPage() {
   const [homeroomNotes, setHomeroomNotes] = useState('');
   const [birthdays, setBirthdays] = useState('');
   const [extraSections, setExtraSections] = useState<{ title: string; body: string }[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState('');
   const [htmlContent, setHtmlContent] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [previewMode, setPreviewMode] = useState<'edit' | 'preview' | 'code'>('edit');
@@ -99,43 +102,31 @@ export default function NewsletterPage() {
   };
 
   const generateHtml = () => {
-    const sectionsHtml = extraSections.map(s =>
-      `<div style="margin:16px 0;"><h3 style="color:#6644bb;border-bottom:2px solid #6644bb;padding-bottom:4px;">${s.title}</h3><p>${s.body}</p></div>`
-    ).join('');
-
-    const html = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px;">
-  <div style="background:linear-gradient(135deg,#6644bb,#0065a7);color:#fff;padding:24px;border-radius:12px;text-align:center;">
-    <h1 style="margin:0;">📬 Homeroom Newsletter</h1>
-    <p style="margin:8px 0 0;opacity:0.9;">${dateRange}</p>
-  </div>
-
-  ${homeroomNotes ? `<div style="margin:16px 0;padding:16px;background:#f8f6ff;border-radius:8px;border-left:4px solid #6644bb;">
-    <h3 style="margin:0 0 8px;color:#6644bb;">📝 Homeroom Notes</h3>
-    <p style="margin:0;white-space:pre-line;">${homeroomNotes}</p>
-  </div>` : ''}
-
-  ${birthdays ? `<div style="margin:16px 0;padding:16px;background:#fff8f0;border-radius:8px;border-left:4px solid #c87800;">
-    <h3 style="margin:0 0 8px;color:#c87800;">🎂 Birthdays</h3>
-    <p style="margin:0;">${birthdays}</p>
-  </div>` : ''}
-
-  ${sectionsHtml}
-
-  <div style="text-align:center;margin-top:24px;padding:16px;color:#888;font-size:12px;">
-    Thales Academy Grade 4A — Mr. Reagan
-  </div>
-</div>`;
+    const html = generateHomeroomPageHtml({
+      weekNum: 0,
+      quarter: '',
+      dateRange: dateRange || 'This Week',
+      quarterColor: '#6644bb',
+      reminders: calendarEvents,
+      resources: extraSections.map(s => `${s.title} | ${s.body}`).join('\n'),
+      homeroomNotes,
+      birthdays,
+      upcomingTests: [],
+    });
     setHtmlContent(html);
     setPreviewMode('preview');
     toast.success('HTML generated!');
   };
 
   const handleSave = async () => {
+    const allSections = calendarEvents.trim()
+      ? [{ title: 'Mark Your Calendars', body: calendarEvents }, ...extraSections]
+      : extraSections;
     const payload = {
       date_range: dateRange,
       homeroom_notes: homeroomNotes,
       birthdays,
-      extra_sections: extraSections,
+      extra_sections: allSections,
       html_content: htmlContent,
       status: 'DRAFT',
     };
@@ -158,11 +149,14 @@ export default function NewsletterPage() {
       // QUEUE — does NOT publish to Canvas immediately. The Friday automation
       // (automation-friday-deploy) will pick up QUEUED newsletters at 4 PM ET
       // and deploy them to the Homeroom course (22254).
+      const allSections = calendarEvents.trim()
+        ? [{ title: 'Mark Your Calendars', body: calendarEvents }, ...extraSections]
+        : extraSections;
       const payload = {
         date_range: dateRange,
         homeroom_notes: homeroomNotes,
         birthdays,
-        extra_sections: extraSections,
+        extra_sections: allSections,
         html_content: htmlContent,
         status: 'QUEUED',
       };
@@ -187,7 +181,10 @@ export default function NewsletterPage() {
     setDateRange(n.date_range || '');
     setHomeroomNotes(n.homeroom_notes || '');
     setBirthdays(n.birthdays || '');
-    setExtraSections(n.extra_sections || []);
+    const sections = n.extra_sections || [];
+    const calSection = sections.find(s => s.title === 'Mark Your Calendars');
+    setCalendarEvents(calSection?.body || '');
+    setExtraSections(sections.filter(s => s.title !== 'Mark Your Calendars'));
     setHtmlContent(n.html_content || '');
     setPreviewMode('edit');
     toast.success('Loaded newsletter');
@@ -196,7 +193,7 @@ export default function NewsletterPage() {
   const handleNew = () => {
     setActiveNewsletterId(null);
     setDateRange(''); setHomeroomNotes(''); setBirthdays('');
-    setExtraSections([]); setHtmlContent(''); setPastedText('');
+    setExtraSections([]); setCalendarEvents(''); setHtmlContent(''); setPastedText('');
     setPreviewMode('edit');
   };
 
@@ -256,6 +253,20 @@ export default function NewsletterPage() {
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase">Birthdays</label>
                 <Input value={birthdays} onChange={e => setBirthdays(e.target.value)} placeholder="Names..." />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Mark Your Calendars</Label>
+                <Textarea
+                  placeholder={"May 8th: Progress Reports\nMay 11th: CLT Testing begins\nMay 19th (6:00): Spring Performance"}
+                  value={calendarEvents}
+                  onChange={(e) => setCalendarEvents(e.target.value)}
+                  rows={5}
+                  className="text-sm font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  One event per line. Will appear in the "Mark Your Calendars" section.
+                </p>
               </div>
 
               <div className="space-y-2">
