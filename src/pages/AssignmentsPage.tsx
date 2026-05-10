@@ -92,8 +92,8 @@ function computeWeekDates(quarter: string, week: number): string[] {
 export default function AssignmentsPage() {
   const config = useConfig();
   const {
-    selectedMonth, selectedWeek, pacingData, isLoading,
-    setSelectedMonth, setSelectedWeek, fetchPacingData,
+    selectedMonth, selectedWeek, isLoading,
+    setSelectedMonth, setSelectedWeek,
   } = useSystemStore();
 
   const [deploying, setDeploying] = useState(false);
@@ -151,22 +151,14 @@ export default function AssignmentsPage() {
   }, [selectedMonth, selectedWeek]);
 
   useEffect(() => {
-    fetchPacingData(selectedMonth, selectedWeek);
     setDeployResults({});
     setSelected(new Set());
-  }, [selectedMonth, selectedWeek, fetchPacingData]);
+  }, [selectedMonth, selectedWeek]);
 
-  // History/Science redirect detection
-  const historyRedirect = useMemo(() => {
-    if (!pacingData) return null;
-    const h = pacingData.subjects['History'];
-    const s = pacingData.subjects['Science'];
-    const allHDash = h?.every((c) => c.isNoClass) ?? true;
-    const allSDash = s?.every((c) => c.isNoClass) ?? true;
-    if (allHDash && !allSDash) return { from: 'History', to: 'Science' };
-    if (allSDash && !allHDash) return { from: 'Science', to: 'History' };
-    return null;
-  }, [pacingData]);
+  // History/Science redirect detection (derived from pacing_rows in main build effect)
+  const [historyRedirect, setHistoryRedirect] = useState<
+    { from: string; to: string } | null
+  >(null);
 
   // Find DB row matching a built assignment to compare hash + Canvas state
   const findDbRow = (subject: string, dayIndex: number, type: string, lessonNum: string) => {
@@ -202,7 +194,17 @@ export default function AssignmentsPage() {
         .select('*')
         .eq('week_id', weekRecord.id);
 
-      if (!pacingRows?.length) { setPreviewRows([]); return; }
+      if (!pacingRows?.length) { setPreviewRows([]); setHistoryRedirect(null); return; }
+
+      // History/Science redirect detection from pacing_rows
+      const isDash = (t: string | null) => !t || t === '-' || t === 'No Class';
+      const histRows = pacingRows.filter((r: any) => r.subject === 'History');
+      const sciRows = pacingRows.filter((r: any) => r.subject === 'Science');
+      const allHistDash = histRows.length === 0 || histRows.every((r: any) => isDash(r.type));
+      const allSciDash = sciRows.length === 0 || sciRows.every((r: any) => isDash(r.type));
+      if (allHistDash && !allSciDash) setHistoryRedirect({ from: 'History', to: 'Science' });
+      else if (allSciDash && !allHistDash) setHistoryRedirect({ from: 'Science', to: 'History' });
+      else setHistoryRedirect(null);
 
       function toPreview(a: BuiltAssignment): PreviewRow {
         const dbRow = findDbRow(a.subject, a.dayIndex, a.type, a.lessonNum);
