@@ -12,6 +12,13 @@
  */
 export type HintOverride = 'evens' | 'odds' | 'none' | null | undefined;
 
+function spellingTestNum(lessonNum: string): string {
+  const n = parseInt(lessonNum);
+  if (isNaN(n)) return lessonNum;
+  // Each test covers 5 lessons: Test 1 = L1-5, Test 22 = L106-110, etc.
+  return String(Math.ceil(n / 5));
+}
+
 export function generateAssignmentTitle(
   subject: string,
   type: string,
@@ -41,12 +48,12 @@ export function generateAssignmentTitle(
       return `${prefix} Reading HW ${num}`;
 
     case 'Spelling':
-      if (type === 'Test') return `${prefix} Spelling Test ${num}`;
+      if (type === 'Test') return `${prefix} Spelling Test ${spellingTestNum(num)}`;
       return `${prefix} Spelling ${num}`;
 
     case 'Language Arts':
       if (type === 'Test') return `${prefix} Shurley Test`;
-      if (type === 'CP' || type === 'Classroom Practice') return `${prefix} Classroom Practice ${num}`;
+      if (type === 'CP' || type === 'Classroom Practice') return `${prefix} 4A - Shurley English Classroom Practice ${num}`;
       return `${prefix} English ${num}`;
 
     default:
