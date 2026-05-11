@@ -94,9 +94,6 @@ export default function PageBuilderPage() {
   const [deployAttempt, setDeployAttempt] = useState<Record<string, number>>({});
   const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
-  // Reset preview error when generated HTML changes
-  useEffect(() => setPreviewError(false), [generatedHtml]);
-
   const handleRealtimeEvent = useCallback((event: any) => {
     if (event.action === 'page_deploy' && event.subject) {
       setDeployStatuses((prev) => ({
