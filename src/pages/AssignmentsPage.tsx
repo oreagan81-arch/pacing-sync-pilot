@@ -38,6 +38,7 @@ import { runQ4W5Tests, type TestResult } from '@/lib/test-runner';
 import type { ContentMapEntry } from '@/lib/auto-link';
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { validateDeployment, type ValidationResult } from '@/lib/pre-deploy-validator';
+import { getPacingWeekDatesISO } from '@/lib/pacing-week';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'];
 const FILTER_CHIPS = ['All', 'Math', 'Reading', 'Language Arts', 'Spelling'];
@@ -64,29 +65,8 @@ interface PacingDbRow {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-const WEEK_STARTS: Record<string, string> = {
-  'Q1-1':'2025-08-18','Q1-2':'2025-08-25','Q1-3':'2025-09-01',
-  'Q1-4':'2025-09-08','Q1-5':'2025-09-15','Q1-6':'2025-09-22',
-  'Q1-7':'2025-09-29','Q1-8':'2025-10-06','Q1-9':'2025-10-13',
-  'Q2-1':'2025-10-27','Q2-2':'2025-11-03','Q2-3':'2025-11-10',
-  'Q2-4':'2025-11-17','Q2-5':'2025-11-24','Q2-6':'2025-12-01',
-  'Q2-7':'2025-12-08','Q2-8':'2025-12-15','Q2-9':'2025-12-22',
-  'Q3-1':'2026-01-05','Q3-2':'2026-01-12','Q3-3':'2026-01-20',
-  'Q3-4':'2026-01-26','Q3-5':'2026-02-02','Q3-6':'2026-02-09',
-  'Q3-7':'2026-02-16','Q3-8':'2026-02-23','Q3-9':'2026-03-02',
-  'Q4-1':'2026-03-23','Q4-2':'2026-03-30','Q4-3':'2026-04-06',
-  'Q4-4':'2026-04-13','Q4-5':'2026-04-27','Q4-6':'2026-05-04',
-  'Q4-7':'2026-05-11','Q4-8':'2026-05-18','Q4-9':'2026-05-26',
-};
-
 function computeWeekDates(quarter: string, week: number): string[] {
-  const startDate = WEEK_STARTS[`${quarter}-${week}`];
-  if (!startDate) return [];
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
+  return getPacingWeekDatesISO(quarter, week);
 }
 
 export default function AssignmentsPage() {
