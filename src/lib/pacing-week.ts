@@ -64,7 +64,7 @@ export function calculatePacingWeek(targetDate: Date = new Date()): PacingWeekIn
     quarter,
     weekInQuarter,
     weekId: `Q${quarter}_W${weekInQuarter}`,
-    dates: `${format(current, 'MMM d')} - ${format(addWeeks(current, 1), 'MMM d, yyyy')}`,
+    dates: `${format(current, 'MMM d')} - ${format(addWeeks(current, 0), 'MMM d, yyyy')}`,
   };
 }
 
