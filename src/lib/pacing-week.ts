@@ -75,3 +75,23 @@ export function calculatePacingWeek(targetDate: Date = new Date()): PacingWeekIn
 export function isOperationalWeek(targetDate: Date = new Date()): boolean {
   return !calculatePacingWeek(targetDate).isBreak;
 }
+
+/** Inverse: given Quarter + WeekInQuarter, resolve the absolute week + Mon date. */
+export function pacingWeekFromQW(quarter: number, weekInQuarter: number): PacingWeekInfo {
+  const quarterOffset: Record<number, number> = { 1: 0, 2: 9, 3: 18, 4: 27 };
+  const targetIW = (quarterOffset[quarter] ?? 0) + weekInQuarter;
+
+  // Find the absolute week whose instructional index equals targetIW
+  let absolute = targetIW;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  for (let i = 0; i < 60; i++) {
+    const breaksPassed = BREAK_WEEKS.filter((bw) => bw < absolute).length;
+    if (absolute - breaksPassed === targetIW && !BREAK_WEEKS.includes(absolute)) break;
+    absolute++;
+  }
+
+  const start = startOfWeek(parseISO(ACADEMIC_START_DATE), { weekStartsOn: 1 });
+  const monday = addDays(start, (absolute - 1) * 7);
+  return calculatePacingWeek(monday);
+}
+
