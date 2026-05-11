@@ -663,34 +663,61 @@ export default function PageBuilderPage() {
                     <p className="text-sm">No data for this subject/week.</p>
                   </div>
                 ) : previewMode === 'preview' ? (
-                  <div className="border rounded-lg overflow-hidden bg-white">
-                    <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
-                      <div className="flex gap-1">
-                        <div className="w-3 h-3 rounded-full bg-red-400" />
-                        <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                        <div className="w-3 h-3 rounded-full bg-green-400" />
-                      </div>
-                      <span className="text-xs text-muted-foreground flex-1 text-center">
-                        Canvas Preview — {activeSubject} | {selectedWeek?.quarter} Week {selectedWeek?.week_num}
-                      </span>
+                  previewError ? (
+                    <div className="border rounded-lg p-8 bg-amber-50 text-amber-800 space-y-3">
+                      <div className="font-semibold">⚠️ Preview rendering failed</div>
+                      <p className="text-sm">
+                        The generated HTML could not be rendered in the preview. You can still deploy — the issue is display-only.
+                      </p>
+                      <details className="text-xs">
+                        <summary className="cursor-pointer font-medium">View raw HTML</summary>
+                        <pre className="mt-2 p-3 bg-white rounded border overflow-auto max-h-64 text-xs whitespace-pre-wrap">
+                          {generatedHtml}
+                        </pre>
+                      </details>
+                      <Button size="sm" variant="outline" onClick={() => setPreviewError(false)}>
+                        Retry Preview
+                      </Button>
                     </div>
-                    <iframe
-                      key={generatedHtml}
-                      srcDoc={`<!DOCTYPE html><html><head>
-                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                        <style>
-                          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                                 padding: 24px; margin: 0; background: white; }
-                          .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
-                          .kl_solid_border { display: block; }
-                        </style>
-                      </head><body>${generatedHtml}</body></html>`}
-                      className="w-full border-0"
-                      style={{ height: '700px' }}
-                      sandbox="allow-same-origin"
-                      title="Canvas page preview"
-                    />
-                  </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden bg-white">
+                      <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <div className="w-3 h-3 rounded-full bg-red-400" />
+                          <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                          <div className="w-3 h-3 rounded-full bg-green-400" />
+                        </div>
+                        <span className="text-xs text-muted-foreground flex-1 text-center">
+                          Canvas Preview — {activeSubject} | {selectedWeek?.quarter} Week {selectedWeek?.week_num}
+                        </span>
+                      </div>
+                      <iframe
+                        key={generatedHtml}
+                        srcDoc={`<!DOCTYPE html><html><head>
+                          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                          <style>
+                            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                                   padding: 24px; margin: 0; background: white; }
+                            .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
+                            .kl_solid_border { display: block; }
+                          </style>
+                        </head><body>${generatedHtml}</body></html>`}
+                        onError={() => setPreviewError(true)}
+                        onLoad={(e) => {
+                          try {
+                            const doc = (e.target as HTMLIFrameElement).contentDocument;
+                            if (!doc || doc.body.innerHTML.trim() === '') setPreviewError(true);
+                          } catch {
+                            setPreviewError(true);
+                          }
+                        }}
+                        className="w-full border-0"
+                        style={{ height: '700px' }}
+                        sandbox="allow-same-origin"
+                        title="Canvas page preview"
+                      />
+                    </div>
+                  )
                 ) : (
                   <pre className="text-xs bg-muted text-foreground p-4 rounded-lg overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
                     {generatedHtml}
