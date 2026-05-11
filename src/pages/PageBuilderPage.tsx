@@ -582,7 +582,11 @@ export default function PageBuilderPage() {
                     className="gap-1.5"
                   >
                     {deploying[activeSubject] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-                    {deploying[activeSubject] ? 'Deploying\u2026' : 'Deploy Page'}
+                    {deploying[activeSubject]
+                      ? deployAttempt[activeSubject] && deployAttempt[activeSubject] > 1
+                        ? `Deploying… (attempt ${deployAttempt[activeSubject]}/3)`
+                        : 'Deploying…'
+                      : 'Deploy Page'}
                   </Button>
                 </div>
 
