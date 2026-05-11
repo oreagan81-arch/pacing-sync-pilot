@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { BuiltAssignment } from './assignment-build';
 import type { ContentMapEntry } from './auto-link';
 import { isFriday } from './friday-rules';
+import { isNoSchoolDay, getEventForDate, type CalendarEvent } from './school-calendar';
 
 /* ============================================================
  * Zod schema — strict validation for Canvas deploy payloads.
@@ -71,6 +72,8 @@ export interface ValidatorInput {
   contentMap: ContentMapEntry[];
   /** Optional: pages being deployed alongside */
   pages?: { title: string; isFrontPage?: boolean; published?: boolean }[];
+  /** Optional: school calendar events for no-school day conflict detection */
+  calendarEvents?: CalendarEvent[];
 }
 
 export interface ValidationResult {
@@ -109,6 +112,7 @@ export function validateDeployment(input: ValidatorInput): ValidationResult {
     checkTitleConventions(input.assignments),
     checkMissingStudyGuides(input.assignments),
     checkFrontPageSettings(input.pages ?? []),
+    checkSchoolCalendar(input.assignments, input.calendarEvents ?? []),
   ];
 
   return {
