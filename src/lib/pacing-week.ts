@@ -19,10 +19,10 @@ const ACADEMIC_START_DATE = '2025-07-21';
 
 // Absolute week indices (1-based) reserved as breaks
 const BREAK_WEEKS = [
-  9, 10, 11,   // Fall Break
-  18,          // Thanksgiving
-  21, 22, 23,  // Winter Break
-  33, 34, 35,  // Spring Break
+  9, 10, 11,    // Fall Break
+  18,           // Thanksgiving
+  21, 22, 23,   // Winter Break
+  38, 39, 40,   // Spring Break / Track Out
 ];
 
 export interface PacingWeekInfo {
