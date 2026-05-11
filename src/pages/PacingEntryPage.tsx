@@ -608,6 +608,56 @@ export default function PacingEntryPage({
     toast.success(`Parsed ${rows.length} cells — review and save`);
   };
 
+  function validateParsedRows(rows: any[]): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    const VALID_SUBJECTS = ['Math','Reading','Spelling','Language Arts','History','Science'];
+    const VALID_DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      errors.push('AI returned empty or non-array response');
+      return { valid: false, errors };
+    }
+    if (rows.length > 30) {
+      errors.push(`AI returned ${rows.length} rows — expected 30 max (6 subjects × 5 days)`);
+    }
+
+    for (const row of rows) {
+      if (!VALID_SUBJECTS.includes(row.subject)) {
+        errors.push(`Invalid subject: "${row.subject}"`);
+      }
+      if (!VALID_DAYS.includes(row.day)) {
+        errors.push(`Invalid day: "${row.day}"`);
+      }
+      const n = parseInt(row.lesson_num || '0');
+      if (row.subject === 'Math' && !isNaN(n) && n > 0 && (n < 1 || n > 140)) {
+        errors.push(`Math lesson ${n} out of range (1-140)`);
+      }
+      if (row.subject === 'Reading' && !isNaN(n) && n > 0 && (n < 1 || n > 160)) {
+        errors.push(`Reading lesson ${n} out of range (1-160)`);
+      }
+      if (row.subject === 'Spelling' && !isNaN(n) && n > 0 && (n < 1 || n > 140)) {
+        errors.push(`Spelling lesson ${n} out of range (1-140)`);
+      }
+    }
+
+    const subjects = [...new Set(rows.map(r => r.subject))];
+    for (const subj of subjects) {
+      const subjRows = rows
+        .filter(r => r.subject === subj)
+        .sort((a, b) => VALID_DAYS.indexOf(a.day) - VALID_DAYS.indexOf(b.day));
+      const nums = subjRows
+        .map(r => parseInt(r.lesson_num || '0'))
+        .filter(n => !isNaN(n) && n > 0);
+      for (let i = 1; i < nums.length; i++) {
+        if (Math.abs(nums[i] - nums[i-1]) > 15) {
+          errors.push(`${subj}: lesson jump from ${nums[i-1]} to ${nums[i]} — possible AI error`);
+        }
+      }
+    }
+
+    return { valid: errors.filter(e => !e.includes('out of range')).length === 0, errors };
+  }
+
   const runAiParse = async (payload: { pastedText?: string; imageBase64?: string; mimeType?: string }) => {
     setAiParsing(true);
     try {
@@ -616,6 +666,20 @@ export default function PacingEntryPage({
       if (data?.error) throw new Error(data.error);
       const rows = data?.rows ?? [];
       if (!rows.length) { toast.info('AI returned no rows'); return; }
+
+      const validation = validateParsedRows(rows);
+      if (!validation.valid) {
+        toast.error('AI parse validation failed', {
+          description: validation.errors.slice(0, 3).join('; '),
+        });
+        return;
+      }
+      if (validation.errors.length > 0) {
+        toast.warning(`AI parse: ${validation.errors.length} warning(s) — review highlighted cells`, {
+          description: validation.errors[0],
+        });
+      }
+
       applyParsedRows(rows);
     } catch (e: any) {
       toast.error('AI parse failed', { description: e?.message });
