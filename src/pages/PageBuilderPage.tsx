@@ -214,6 +214,33 @@ export default function PageBuilderPage() {
     });
   }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter]);
 
+  // Reset preview error when generated HTML changes
+  useEffect(() => setPreviewError(false), [generatedHtml]);
+
+  // Deploy with retry healing — up to 3 attempts with backoff
+  const deployWithRetry = useCallback(
+    async (subject: string, payload: object, maxAttempts = 3): Promise<any> => {
+      let lastErr: Error | null = null;
+      for (let i = 0; i < maxAttempts; i++) {
+        setDeployAttempt((p) => ({ ...p, [subject]: i + 1 }));
+        try {
+          const result = await supabase.functions.invoke('canvas-deploy-page', { body: payload });
+          if (result.error) throw new Error(result.error.message);
+          return result.data;
+        } catch (e: any) {
+          lastErr = e instanceof Error ? e : new Error(String(e));
+          if (i < maxAttempts - 1) {
+            const wait = [1000, 3000, 8000][i];
+            await new Promise((r) => setTimeout(r, wait));
+            toast.info(`Deploy attempt ${i + 2}/${maxAttempts}…`);
+          }
+        }
+      }
+      throw lastErr;
+    },
+    [],
+  );
+
   // Canvas page naming: Q4W2, Q3W5, etc.
   const getPageSlug = (quarter: string, weekNum: number) => {
     // Extract quarter number from "Q4" or "Quarter 4" etc.
