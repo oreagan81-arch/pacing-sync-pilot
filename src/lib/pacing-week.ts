@@ -1,5 +1,5 @@
 import {
-  addWeeks,
+  addDays,
   differenceInCalendarWeeks,
   format,
   parseISO,
@@ -12,8 +12,7 @@ import {
  * Absolute calendar weeks include breaks (Fall, Thanksgiving, Winter, Spring).
  * Instructional weeks skip these breaks to maintain curriculum pacing.
  *
- * Single source of truth for `weekId` generation (e.g. Q4_W6).
- * Q4W6 ≡ Instructional Week 33.
+ * Single source of truth for `weekId` generation (e.g. Q4_W6 ≡ Instructional Week 33).
  */
 
 const ACADEMIC_START_DATE = '2025-07-21';
@@ -31,17 +30,18 @@ export interface PacingWeekInfo {
   quarter: number;
   weekInQuarter: number;
   weekId: string;
+  /** "May 11 - May 15, 2026" — Monday through Friday */
   dates: string;
+  isBreak: boolean;
+  absoluteWeekNum: number;
 }
 
-/** Compute Instructional Week info for a given date (defaults to today). */
+/** Compute the active instructional week and Mon–Fri date range. */
 export function calculatePacingWeek(targetDate: Date = new Date()): PacingWeekInfo {
   const start = startOfWeek(parseISO(ACADEMIC_START_DATE), { weekStartsOn: 1 });
   const current = startOfWeek(targetDate, { weekStartsOn: 1 });
 
   const absoluteWeekNum = differenceInCalendarWeeks(current, start) + 1;
-
-  // Subtract any break weeks that occurred BEFORE this absolute week
   const breaksPassed = BREAK_WEEKS.filter((bw) => bw < absoluteWeekNum).length;
   const activeWeekNumber = absoluteWeekNum - breaksPassed;
 
@@ -50,7 +50,7 @@ export function calculatePacingWeek(targetDate: Date = new Date()): PacingWeekIn
 
   if (activeWeekNumber > 27) {
     quarter = 4;
-    weekInQuarter = activeWeekNumber - 27; // Week 33 → Q4W6
+    weekInQuarter = activeWeekNumber - 27;
   } else if (activeWeekNumber > 18) {
     quarter = 3;
     weekInQuarter = activeWeekNumber - 18;
@@ -59,19 +59,19 @@ export function calculatePacingWeek(targetDate: Date = new Date()): PacingWeekIn
     weekInQuarter = activeWeekNumber - 9;
   }
 
+  const friday = addDays(current, 4);
+
   return {
     activeWeekNumber,
     quarter,
     weekInQuarter,
     weekId: `Q${quarter}_W${weekInQuarter}`,
-    dates: `${format(current, 'MMM d')} - ${format(addWeeks(current, 0), 'MMM d, yyyy')}`,
+    dates: `${format(current, 'MMM d')} - ${format(friday, 'MMM d, yyyy')}`,
+    isBreak: BREAK_WEEKS.includes(absoluteWeekNum),
+    absoluteWeekNum,
   };
 }
 
-/** True if the absolute calendar week is NOT a break week. */
 export function isOperationalWeek(targetDate: Date = new Date()): boolean {
-  const start = startOfWeek(parseISO(ACADEMIC_START_DATE), { weekStartsOn: 1 });
-  const current = startOfWeek(targetDate, { weekStartsOn: 1 });
-  const absoluteWeekNum = differenceInCalendarWeeks(current, start) + 1;
-  return !BREAK_WEEKS.includes(absoluteWeekNum);
+  return !calculatePacingWeek(targetDate).isBreak;
 }
