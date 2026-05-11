@@ -324,6 +324,7 @@ export default function PacingEntryPage({
   const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
+  const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
   const [syncingResources, setSyncingResources] = useState(false);
 
   // Smart input panel
