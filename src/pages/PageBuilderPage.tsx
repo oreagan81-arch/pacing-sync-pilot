@@ -90,6 +90,8 @@ export default function PageBuilderPage() {
   const [diffOpen, setDiffOpen] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
+  const [previewError, setPreviewError] = useState(false);
+  const [deployAttempt, setDeployAttempt] = useState<Record<string, number>>({});
   const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
   const handleRealtimeEvent = useCallback((event: any) => {
@@ -212,6 +214,33 @@ export default function PageBuilderPage() {
     });
   }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter]);
 
+  // Reset preview error when generated HTML changes
+  useEffect(() => setPreviewError(false), [generatedHtml]);
+
+  // Deploy with retry healing — up to 3 attempts with backoff
+  const deployWithRetry = useCallback(
+    async (subject: string, payload: object, maxAttempts = 3): Promise<any> => {
+      let lastErr: Error | null = null;
+      for (let i = 0; i < maxAttempts; i++) {
+        setDeployAttempt((p) => ({ ...p, [subject]: i + 1 }));
+        try {
+          const result = await supabase.functions.invoke('canvas-deploy-page', { body: payload });
+          if (result.error) throw new Error(result.error.message);
+          return result.data;
+        } catch (e: any) {
+          lastErr = e instanceof Error ? e : new Error(String(e));
+          if (i < maxAttempts - 1) {
+            const wait = [1000, 3000, 8000][i];
+            await new Promise((r) => setTimeout(r, wait));
+            toast.info(`Deploy attempt ${i + 2}/${maxAttempts}…`);
+          }
+        }
+      }
+      throw lastErr;
+    },
+    [],
+  );
+
   // Canvas page naming: Q4W2, Q3W5, etc.
   const getPageSlug = (quarter: string, weekNum: number) => {
     // Extract quarter number from "Q4" or "Quarter 4" etc.
@@ -307,7 +336,7 @@ export default function PageBuilderPage() {
             status: 'DEPLOYED',
             canvasUrl: `https://canvas.test/courses/${courseId}/pages/${pageSlug}`,
           } as { status?: string; canvasUrl?: string; error?: string }
-        : await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
+        : await deployWithRetry(subject, {
             subject,
             courseId,
             pageUrl: pageSlug,
@@ -317,7 +346,7 @@ export default function PageBuilderPage() {
             setFrontPage: true,
             weekId: selectedWeekId || null,
             contentHash,
-          });
+          }) as { status?: string; canvasUrl?: string; error?: string };
 
       if (testMode) {
         console.log('[TEST DEPLOY PAGE]', subject, '→', result.canvasUrl);
@@ -339,6 +368,7 @@ export default function PageBuilderPage() {
       setDeployStatuses((p) => ({ ...p, [subject]: { status: 'ERROR' } }));
     }
     setDeploying((p) => ({ ...p, [subject]: false }));
+    setDeployAttempt((p) => ({ ...p, [subject]: 0 }));
   };
 
   const deployableSubjects = useMemo(() => {
@@ -552,7 +582,11 @@ export default function PageBuilderPage() {
                     className="gap-1.5"
                   >
                     {deploying[activeSubject] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-                    {deploying[activeSubject] ? 'Deploying\u2026' : 'Deploy Page'}
+                    {deploying[activeSubject]
+                      ? deployAttempt[activeSubject] && deployAttempt[activeSubject] > 1
+                        ? `Deploying… (attempt ${deployAttempt[activeSubject]}/3)`
+                        : 'Deploying…'
+                      : 'Deploy Page'}
                   </Button>
                 </div>
 
@@ -629,34 +663,61 @@ export default function PageBuilderPage() {
                     <p className="text-sm">No data for this subject/week.</p>
                   </div>
                 ) : previewMode === 'preview' ? (
-                  <div className="border rounded-lg overflow-hidden bg-white">
-                    <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
-                      <div className="flex gap-1">
-                        <div className="w-3 h-3 rounded-full bg-red-400" />
-                        <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                        <div className="w-3 h-3 rounded-full bg-green-400" />
-                      </div>
-                      <span className="text-xs text-muted-foreground flex-1 text-center">
-                        Canvas Preview — {activeSubject} | {selectedWeek?.quarter} Week {selectedWeek?.week_num}
-                      </span>
+                  previewError ? (
+                    <div className="border rounded-lg p-8 bg-amber-50 text-amber-800 space-y-3">
+                      <div className="font-semibold">⚠️ Preview rendering failed</div>
+                      <p className="text-sm">
+                        The generated HTML could not be rendered in the preview. You can still deploy — the issue is display-only.
+                      </p>
+                      <details className="text-xs">
+                        <summary className="cursor-pointer font-medium">View raw HTML</summary>
+                        <pre className="mt-2 p-3 bg-white rounded border overflow-auto max-h-64 text-xs whitespace-pre-wrap">
+                          {generatedHtml}
+                        </pre>
+                      </details>
+                      <Button size="sm" variant="outline" onClick={() => setPreviewError(false)}>
+                        Retry Preview
+                      </Button>
                     </div>
-                    <iframe
-                      key={generatedHtml}
-                      srcDoc={`<!DOCTYPE html><html><head>
-                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                        <style>
-                          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                                 padding: 24px; margin: 0; background: white; }
-                          .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
-                          .kl_solid_border { display: block; }
-                        </style>
-                      </head><body>${generatedHtml}</body></html>`}
-                      className="w-full border-0"
-                      style={{ height: '700px' }}
-                      sandbox="allow-same-origin"
-                      title="Canvas page preview"
-                    />
-                  </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden bg-white">
+                      <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <div className="w-3 h-3 rounded-full bg-red-400" />
+                          <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                          <div className="w-3 h-3 rounded-full bg-green-400" />
+                        </div>
+                        <span className="text-xs text-muted-foreground flex-1 text-center">
+                          Canvas Preview — {activeSubject} | {selectedWeek?.quarter} Week {selectedWeek?.week_num}
+                        </span>
+                      </div>
+                      <iframe
+                        key={generatedHtml}
+                        srcDoc={`<!DOCTYPE html><html><head>
+                          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                          <style>
+                            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                                   padding: 24px; margin: 0; background: white; }
+                            .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
+                            .kl_solid_border { display: block; }
+                          </style>
+                        </head><body>${generatedHtml}</body></html>`}
+                        onError={() => setPreviewError(true)}
+                        onLoad={(e) => {
+                          try {
+                            const doc = (e.target as HTMLIFrameElement).contentDocument;
+                            if (!doc || doc.body.innerHTML.trim() === '') setPreviewError(true);
+                          } catch {
+                            setPreviewError(true);
+                          }
+                        }}
+                        className="w-full border-0"
+                        style={{ height: '700px' }}
+                        sandbox="allow-same-origin"
+                        title="Canvas page preview"
+                      />
+                    </div>
+                  )
                 ) : (
                   <pre className="text-xs bg-muted text-foreground p-4 rounded-lg overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
                     {generatedHtml}
