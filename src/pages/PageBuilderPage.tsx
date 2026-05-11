@@ -21,6 +21,7 @@ import {
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
 import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImportDialog';
+import { loadSchoolCalendar, getWeekEvents, type CalendarEvent } from '@/lib/school-calendar';
 
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -88,6 +89,7 @@ export default function PageBuilderPage() {
   const [deployingAll, setDeployingAll] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [testMode, setTestMode] = useState(false);
+  const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
   const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
   const handleRealtimeEvent = useCallback((event: any) => {
@@ -108,6 +110,7 @@ export default function PageBuilderPage() {
 
   useEffect(() => {
     refreshWeeks();
+    loadSchoolCalendar(supabase).then(setCalendar).catch(() => {});
     supabase.from('content_map').select('lesson_ref, subject, canvas_url, canonical_name').then(({ data }) => {
       if (data) setContentMap(data as ContentMapEntry[]);
     });
@@ -395,8 +398,30 @@ export default function PageBuilderPage() {
     return <Badge variant="outline" className="text-[10px]">{s.status}</Badge>;
   };
 
+  const testingBanner = useMemo(() => {
+    if (!selectedWeek || calendar.length === 0) return null;
+    const start = WEEK_STARTS[`${selectedWeek.quarter}-${selectedWeek.week_num}`];
+    if (!start) return null;
+    const [y, m, d] = start.split('-').map(Number);
+    const dates: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const dt = new Date(y, m - 1, d + i);
+      dates.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`);
+    }
+    const events = getWeekEvents(dates, calendar).filter((e) => e.event_type === 'testing_window');
+    if (events.length === 0) return null;
+    const label = events[0].label;
+    const range = `${events[0].date} – ${events[events.length - 1].date}`;
+    return `⚠️ Testing Window: ${label} ${range} — check assignment due dates`;
+  }, [selectedWeek, calendar]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {testingBanner && (
+        <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-300">
+          {testingBanner}
+        </div>
+      )}
       {/* Header bar */}
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={selectedWeekId} onValueChange={setSelectedWeekId}>

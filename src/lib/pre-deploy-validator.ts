@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { BuiltAssignment } from './assignment-build';
 import type { ContentMapEntry } from './auto-link';
 import { isFriday } from './friday-rules';
+import { isNoSchoolDay, getEventForDate, type CalendarEvent } from './school-calendar';
 
 /* ============================================================
  * Zod schema — strict validation for Canvas deploy payloads.
@@ -71,6 +72,8 @@ export interface ValidatorInput {
   contentMap: ContentMapEntry[];
   /** Optional: pages being deployed alongside */
   pages?: { title: string; isFrontPage?: boolean; published?: boolean }[];
+  /** Optional: school calendar events for no-school day conflict detection */
+  calendarEvents?: CalendarEvent[];
 }
 
 export interface ValidationResult {
@@ -109,6 +112,7 @@ export function validateDeployment(input: ValidatorInput): ValidationResult {
     checkTitleConventions(input.assignments),
     checkMissingStudyGuides(input.assignments),
     checkFrontPageSettings(input.pages ?? []),
+    checkSchoolCalendar(input.assignments, input.calendarEvents ?? []),
   ];
 
   return {
@@ -357,5 +361,46 @@ function checkFrontPageSettings(
     level: 'fail',
     detail: `${unpublished.length} front page(s) missing published flag.`,
     items: unpublished.map((p) => p.title),
+  };
+}
+
+/**
+ * 7. School Calendar conflicts — assignments due on holidays, track-out days,
+ * or no-school days. Warning level (informational) until calendar is fully seeded.
+ */
+function checkSchoolCalendar(
+  assignments: BuiltAssignment[],
+  calendarEvents: CalendarEvent[],
+): ValidationCheck {
+  if (calendarEvents.length === 0) {
+    return {
+      id: 'school-calendar',
+      label: 'School Calendar Conflict',
+      level: 'pass',
+      detail: 'School calendar not loaded — skipping check.',
+    };
+  }
+  const conflicts: string[] = [];
+  for (const a of assignments) {
+    if (a.skipReason || !a.dueDate) continue;
+    if (isNoSchoolDay(a.dueDate, calendarEvents)) {
+      const event = getEventForDate(a.dueDate, calendarEvents);
+      conflicts.push(`${a.title} due on ${a.dueDate} (${event?.label ?? 'no school'})`);
+    }
+  }
+  if (conflicts.length === 0) {
+    return {
+      id: 'school-calendar',
+      label: 'School Calendar Conflict',
+      level: 'pass',
+      detail: 'No assignments fall on no-school days.',
+    };
+  }
+  return {
+    id: 'school-calendar',
+    label: 'School Calendar Conflict',
+    level: 'warn',
+    detail: `${conflicts.length} assignment(s) due on no-school days.`,
+    items: conflicts.slice(0, 10),
   };
 }

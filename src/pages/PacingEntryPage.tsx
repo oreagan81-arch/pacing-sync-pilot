@@ -20,6 +20,7 @@ import { useConfig } from '@/lib/config';
 import { evaluateWeekRisk } from '@/lib/risk-engine';
 import { cn } from '@/lib/utils';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import { loadSchoolCalendar, getWeekEvents, type CalendarEvent } from '@/lib/school-calendar';
 
 const SUBJECTS = ['Math', 'Reading', 'Spelling', 'Language Arts', 'History', 'Science'] as const;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
@@ -323,6 +324,7 @@ export default function PacingEntryPage({
   const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
   const [savedWeeks, setSavedWeeks] = useState<{ id: string; quarter: string; week_num: number }[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
+  const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
   const [syncingResources, setSyncingResources] = useState(false);
 
   // Smart input panel
@@ -366,6 +368,7 @@ export default function PacingEntryPage({
     if (data) setContentMap(data as ContentMapEntry[]);
   }, []);
   useEffect(() => { void loadContentMap(); }, [loadContentMap]);
+  useEffect(() => { loadSchoolCalendar(supabase).then(setCalendar).catch(() => {}); }, []);
 
   const handleSyncResources = useCallback(async () => {
     setSyncingResources(true);
@@ -714,8 +717,24 @@ export default function PacingEntryPage({
     [savedWeeks],
   );
 
+  const testingBanner = useMemo(() => {
+    if (calendar.length === 0) return null;
+    const start = WEEK_STARTS[`${activeQuarter}-${activeWeek}`];
+    if (!start) return null;
+    const dates: string[] = [];
+    for (let i = 0; i < 5; i++) dates.push(addDaysIso(start, i));
+    const events = getWeekEvents(dates, calendar).filter((e) => e.event_type === 'testing_window');
+    if (events.length === 0) return null;
+    return `⚠️ Testing Window: ${events[0].label} ${events[0].date} – ${events[events.length - 1].date} — check assignment due dates`;
+  }, [calendar, activeQuarter, activeWeek]);
+
   return (
     <div className="animate-in fade-in duration-300 space-y-4">
+      {testingBanner && (
+        <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-300">
+          {testingBanner}
+        </div>
+      )}
       {/* ───────────────────────────────────────── */}
       {/* SECTION A: Header bar (status, save, sync) */}
       {/* ───────────────────────────────────────── */}

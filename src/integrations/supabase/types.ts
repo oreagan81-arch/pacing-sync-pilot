@@ -621,6 +621,36 @@ export type Database = {
           },
         ]
       }
+      school_calendar: {
+        Row: {
+          affects_all: boolean
+          created_at: string
+          date: string
+          event_type: string
+          id: string
+          label: string
+          school_year: string
+        }
+        Insert: {
+          affects_all?: boolean
+          created_at?: string
+          date: string
+          event_type: string
+          id?: string
+          label: string
+          school_year?: string
+        }
+        Update: {
+          affects_all?: boolean
+          created_at?: string
+          date?: string
+          event_type?: string
+          id?: string
+          label?: string
+          school_year?: string
+        }
+        Relationships: []
+      }
       system_config: {
         Row: {
           assignment_prefixes: Json
