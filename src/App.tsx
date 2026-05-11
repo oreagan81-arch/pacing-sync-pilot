@@ -47,14 +47,20 @@ function AppContent({ config }: { config: AppConfig }) {
   const setSelectedWeek = useSystemStore((s) => s.setSelectedWeek);
 
   useEffect(() => {
+    setSelectedMonth(activeQuarter);
+  }, [activeQuarter, setSelectedMonth]);
+
+  useEffect(() => {
+    setSelectedWeek(activeWeek);
+  }, [activeWeek, setSelectedWeek]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       const apply = (q: string, w: number) => {
         if (cancelled) return;
         setActiveQuarter(q);
         setActiveWeek(w);
-        setSelectedMonth(q);
-        setSelectedWeek(w);
         setBootLoading(false);
       };
       try {
