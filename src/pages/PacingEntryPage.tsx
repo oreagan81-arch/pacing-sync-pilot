@@ -717,8 +717,24 @@ export default function PacingEntryPage({
     [savedWeeks],
   );
 
+  const testingBanner = useMemo(() => {
+    if (calendar.length === 0) return null;
+    const start = WEEK_STARTS[`${activeQuarter}-${activeWeek}`];
+    if (!start) return null;
+    const dates: string[] = [];
+    for (let i = 0; i < 5; i++) dates.push(addDaysIso(start, i));
+    const events = getWeekEvents(dates, calendar).filter((e) => e.event_type === 'testing_window');
+    if (events.length === 0) return null;
+    return `⚠️ Testing Window: ${events[0].label} ${events[0].date} – ${events[events.length - 1].date} — check assignment due dates`;
+  }, [calendar, activeQuarter, activeWeek]);
+
   return (
     <div className="animate-in fade-in duration-300 space-y-4">
+      {testingBanner && (
+        <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-300">
+          {testingBanner}
+        </div>
+      )}
       {/* ───────────────────────────────────────── */}
       {/* SECTION A: Header bar (status, save, sync) */}
       {/* ───────────────────────────────────────── */}
