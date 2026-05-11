@@ -368,6 +368,7 @@ export default function PacingEntryPage({
     if (data) setContentMap(data as ContentMapEntry[]);
   }, []);
   useEffect(() => { void loadContentMap(); }, [loadContentMap]);
+  useEffect(() => { loadSchoolCalendar(supabase).then(setCalendar).catch(() => {}); }, []);
 
   const handleSyncResources = useCallback(async () => {
     setSyncingResources(true);
