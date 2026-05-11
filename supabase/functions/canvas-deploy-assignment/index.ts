@@ -127,6 +127,26 @@ Deno.serve(async (req) => {
         blockedReason = "Language Arts — only CP and Test create assignments (rule)";
       }
     }
+
+    // CLT / No-School Day Guard — block any assignment whose dueDate falls on a
+    // non-instructional day (CLT testing window, holiday, track-out, teacher workday).
+    // Synthetic rows and force=true bypass.
+    if (!guardSynthetic && !force && dueDate && !blockedReason) {
+      const { data: cal } = await sb
+        .from("school_calendar")
+        .select("event_type, label")
+        .eq("date", dueDate)
+        .maybeSingle();
+      if (cal && ["testing_window", "holiday", "track_out", "teacher_workday"].includes(cal.event_type)) {
+        const labelMap: Record<string, string> = {
+          testing_window: "CLT Testing",
+          holiday: "Holiday",
+          track_out: "Track Out",
+          teacher_workday: "Teacher Workday",
+        };
+        blockedReason = `${labelMap[cal.event_type]} — non-instructional day (${cal.label})`;
+      }
+    }
     if (blockedReason) {
       await sb.from("deploy_log").insert({
         week_id: weekId || null,
