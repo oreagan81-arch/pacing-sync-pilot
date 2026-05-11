@@ -136,6 +136,14 @@ export default function PageBuilderPage() {
       });
   }, [selectedWeekId, weeks]);
 
+  useEffect(() => {
+    if (!weeks.length || !selectedMonth || !storeWeek) return;
+    const matchingWeek = weeks.find((w) => w.quarter === selectedMonth && w.week_num === storeWeek);
+    if (matchingWeek && matchingWeek.id !== selectedWeekId) {
+      setSelectedWeekId(matchingWeek.id);
+    }
+  }, [weeks, selectedMonth, storeWeek, selectedWeekId]);
+
   const rows: CanvasPageRow[] = useMemo(() => savedRows, [savedRows]);
 
   // Get rows for active subject (Reading tab merges Reading + Spelling via Together Logic)
