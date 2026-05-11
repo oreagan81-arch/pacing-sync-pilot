@@ -363,3 +363,44 @@ function checkFrontPageSettings(
     items: unpublished.map((p) => p.title),
   };
 }
+
+/**
+ * 7. School Calendar conflicts — assignments due on holidays, track-out days,
+ * or no-school days. Warning level (informational) until calendar is fully seeded.
+ */
+function checkSchoolCalendar(
+  assignments: BuiltAssignment[],
+  calendarEvents: CalendarEvent[],
+): ValidationCheck {
+  if (calendarEvents.length === 0) {
+    return {
+      id: 'school-calendar',
+      label: 'School Calendar Conflict',
+      level: 'pass',
+      detail: 'School calendar not loaded — skipping check.',
+    };
+  }
+  const conflicts: string[] = [];
+  for (const a of assignments) {
+    if (a.skipReason || !a.dueDate) continue;
+    if (isNoSchoolDay(a.dueDate, calendarEvents)) {
+      const event = getEventForDate(a.dueDate, calendarEvents);
+      conflicts.push(`${a.title} due on ${a.dueDate} (${event?.label ?? 'no school'})`);
+    }
+  }
+  if (conflicts.length === 0) {
+    return {
+      id: 'school-calendar',
+      label: 'School Calendar Conflict',
+      level: 'pass',
+      detail: 'No assignments fall on no-school days.',
+    };
+  }
+  return {
+    id: 'school-calendar',
+    label: 'School Calendar Conflict',
+    level: 'warn',
+    detail: `${conflicts.length} assignment(s) due on no-school days.`,
+    items: conflicts.slice(0, 10),
+  };
+}
