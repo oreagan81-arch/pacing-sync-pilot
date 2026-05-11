@@ -336,7 +336,7 @@ export default function PageBuilderPage() {
             status: 'DEPLOYED',
             canvasUrl: `https://canvas.test/courses/${courseId}/pages/${pageSlug}`,
           } as { status?: string; canvasUrl?: string; error?: string }
-        : await callEdge<{ status?: string; canvasUrl?: string; error?: string }>('canvas-deploy-page', {
+        : await deployWithRetry(subject, {
             subject,
             courseId,
             pageUrl: pageSlug,
@@ -346,7 +346,7 @@ export default function PageBuilderPage() {
             setFrontPage: true,
             weekId: selectedWeekId || null,
             contentHash,
-          });
+          }) as { status?: string; canvasUrl?: string; error?: string };
 
       if (testMode) {
         console.log('[TEST DEPLOY PAGE]', subject, '→', result.canvasUrl);
