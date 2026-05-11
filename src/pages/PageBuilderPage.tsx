@@ -368,6 +368,7 @@ export default function PageBuilderPage() {
       setDeployStatuses((p) => ({ ...p, [subject]: { status: 'ERROR' } }));
     }
     setDeploying((p) => ({ ...p, [subject]: false }));
+    setDeployAttempt((p) => ({ ...p, [subject]: 0 }));
   };
 
   const deployableSubjects = useMemo(() => {
