@@ -21,6 +21,7 @@ import {
 import { logDeployHabit } from '@/lib/teacher-memory';
 import { StyleSuggestions } from '@/components/canvas-brain/StyleSuggestions';
 import { FullSheetImportDialog } from '@/components/pacing-entry/FullSheetImportDialog';
+import { loadSchoolCalendar, getWeekEvents, type CalendarEvent } from '@/lib/school-calendar';
 
 const PAGE_SUBJECTS = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'] as const;
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -88,6 +89,7 @@ export default function PageBuilderPage() {
   const [deployingAll, setDeployingAll] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [testMode, setTestMode] = useState(false);
+  const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
   const { selectedMonth, selectedWeek: storeWeek } = useSystemStore();
 
   const handleRealtimeEvent = useCallback((event: any) => {
@@ -108,6 +110,7 @@ export default function PageBuilderPage() {
 
   useEffect(() => {
     refreshWeeks();
+    loadSchoolCalendar(supabase).then(setCalendar).catch(() => {});
     supabase.from('content_map').select('lesson_ref, subject, canvas_url, canonical_name').then(({ data }) => {
       if (data) setContentMap(data as ContentMapEntry[]);
     });
