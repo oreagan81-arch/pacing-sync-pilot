@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       announcements: {
         Row: {
+          canvas_url: string | null
           content: string | null
           course_id: number | null
           created_at: string | null
@@ -30,6 +31,7 @@ export type Database = {
           week_id: string | null
         }
         Insert: {
+          canvas_url?: string | null
           content?: string | null
           course_id?: number | null
           created_at?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           week_id?: string | null
         }
         Update: {
+          canvas_url?: string | null
           content?: string | null
           course_id?: number | null
           created_at?: string | null
@@ -501,10 +504,14 @@ export type Database = {
           created_at: string | null
           date_range: string | null
           extra_sections: Json | null
+          footer_line: string | null
           homeroom_notes: string | null
           html_content: string | null
           id: string
+          points_of_contact: Json
           posted_at: string | null
+          quick_links: Json
+          school_news: string | null
           status: string | null
           updated_at: string
         }
@@ -513,10 +520,14 @@ export type Database = {
           created_at?: string | null
           date_range?: string | null
           extra_sections?: Json | null
+          footer_line?: string | null
           homeroom_notes?: string | null
           html_content?: string | null
           id?: string
+          points_of_contact?: Json
           posted_at?: string | null
+          quick_links?: Json
+          school_news?: string | null
           status?: string | null
           updated_at?: string
         }
@@ -525,10 +536,14 @@ export type Database = {
           created_at?: string | null
           date_range?: string | null
           extra_sections?: Json | null
+          footer_line?: string | null
           homeroom_notes?: string | null
           html_content?: string | null
           id?: string
+          points_of_contact?: Json
           posted_at?: string | null
+          quick_links?: Json
+          school_news?: string | null
           status?: string | null
           updated_at?: string
         }
@@ -624,6 +639,7 @@ export type Database = {
       school_calendar: {
         Row: {
           affects_all: boolean
+          cancels_instruction: boolean
           created_at: string
           date: string
           event_type: string
@@ -633,6 +649,7 @@ export type Database = {
         }
         Insert: {
           affects_all?: boolean
+          cancels_instruction?: boolean
           created_at?: string
           date: string
           event_type: string
@@ -642,6 +659,7 @@ export type Database = {
         }
         Update: {
           affects_all?: boolean
+          cancels_instruction?: boolean
           created_at?: string
           date?: string
           event_type?: string
@@ -836,6 +854,8 @@ export type Database = {
           quarter: string
           reminders: string | null
           resources: string | null
+          subject_reminders: Json
+          subject_resources: Json
           updated_at: string
           week_num: number
         }
@@ -849,6 +869,8 @@ export type Database = {
           quarter: string
           reminders?: string | null
           resources?: string | null
+          subject_reminders?: Json
+          subject_resources?: Json
           updated_at?: string
           week_num: number
         }
@@ -862,6 +884,8 @@ export type Database = {
           quarter?: string
           reminders?: string | null
           resources?: string | null
+          subject_reminders?: Json
+          subject_resources?: Json
           updated_at?: string
           week_num?: number
         }
