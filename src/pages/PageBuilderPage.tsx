@@ -62,6 +62,8 @@ interface WeekOption {
   date_range: string | null;
   reminders: string | null;
   resources: string | null;
+  subject_reminders: Record<string, string> | null;
+  subject_resources: Record<string, unknown[]> | null;
   active_hs_subject?: string | null;
 }
 
