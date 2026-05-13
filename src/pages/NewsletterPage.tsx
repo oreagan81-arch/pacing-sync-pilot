@@ -125,6 +125,10 @@ export default function NewsletterPage() {
       calendarReminders: calendarEvents,
       homeroomNotes,
       birthdays,
+      schoolNews,
+      pointsOfContact,
+      quickLinks,
+      footer: footerLine || DEFAULT_FOOTER,
     });
     setHtmlContent(html);
     setPreviewMode('preview');
