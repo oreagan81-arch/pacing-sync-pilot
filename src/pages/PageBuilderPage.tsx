@@ -80,7 +80,14 @@ export default function PageBuilderPage() {
   const [selectedWeek, setSelectedWeek] = useState<WeekOption | null>(null);
   const [savedRows, setSavedRows] = useState<CanvasPageRow[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
-  const [latestNewsletter, setLatestNewsletter] = useState<{ homeroom_notes: string | null; birthdays: string | null } | null>(null);
+  const [latestNewsletter, setLatestNewsletter] = useState<{
+    homeroom_notes: string | null;
+    birthdays: string | null;
+    school_news?: string | null;
+    points_of_contact?: ContactEntry[];
+    quick_links?: LinkEntry[];
+    footer_line?: string | null;
+  } | null>(null);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
