@@ -1109,21 +1109,59 @@ export default function PacingEntryPage({
       {/* SECTION C: Editable grid + week-level fields */}
       {/* ───────────────────────────────────────── */}
       <div className="space-y-4">
-        {/* Reminders + Resources */}
+        {/* Per-Subject Reminders (tabs) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Per-Subject Reminders
+            </label>
+            <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
+              <Zap className="h-3 w-3" /> Auto-fill Tests
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SUBJECT_REMINDER_TABS.map((s) => {
+              const has = (subjectReminders[s] || '').trim().length > 0;
+              const active = activeReminderSubject === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setActiveReminderSubject(s)}
+                  className={`px-2 py-1 rounded text-[11px] border transition ${
+                    active
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/30 border-border hover:bg-muted/60'
+                  }`}
+                >
+                  {s}{has ? ' •' : ''}
+                </button>
+              );
+            })}
+          </div>
+          <Textarea
+            value={subjectReminders[activeReminderSubject] || ''}
+            onChange={(e) => {
+              setSubjectReminders((prev) => ({ ...prev, [activeReminderSubject]: e.target.value }));
+              setIsDirty(true);
+            }}
+            placeholder={`Reminders shown on the ${activeReminderSubject} Canvas page (one per line)`}
+            className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
+            style={{ borderLeftColor: '#c51062' }}
+            rows={3}
+          />
+        </div>
+
+        {/* Homeroom calendar reminders + Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Reminders
-              </label>
-              <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
-                <Zap className="h-3 w-3" /> Auto-fill Tests
-              </Button>
-            </div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Homeroom — Mark Your Calendars
+            </label>
             <Textarea
               value={reminders}
               onChange={(e) => { setReminders(e.target.value); setIsDirty(true); }}
-              placeholder="One reminder per line..."
+              placeholder="Calendar items shown only in the Homeroom newsletter..."
               className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
               style={{ borderLeftColor: '#c51062' }}
               rows={3}
