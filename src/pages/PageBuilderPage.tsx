@@ -178,6 +178,11 @@ export default function PageBuilderPage() {
     return filterTogetherPageRows(rows, activeSubject);
   }, [rows, activeSubject]);
 
+  const weekDates = useMemo(() => {
+    if (!selectedWeek) return [] as string[];
+    return getPacingWeekDatesISO(selectedWeek.quarter, selectedWeek.week_num);
+  }, [selectedWeek]);
+
   // Generate HTML for active subject
   const generatedHtml = useMemo(() => {
     if (!selectedWeek || !config) return '';
