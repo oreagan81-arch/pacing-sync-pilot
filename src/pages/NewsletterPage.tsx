@@ -12,6 +12,9 @@ import { callEdge } from '@/lib/edge';
 import { Label } from '@/components/ui/label';
 import { generateHomeroomPageHtml } from '@/lib/canvas-html';
 
+interface ContactEntry { name: string; role: string; email: string }
+interface LinkEntry { label: string; url: string }
+
 interface Newsletter {
   id: string;
   date_range: string | null;
@@ -22,7 +25,13 @@ interface Newsletter {
   status: string | null;
   posted_at: string | null;
   created_at: string | null;
+  school_news?: string | null;
+  points_of_contact?: ContactEntry[];
+  quick_links?: LinkEntry[];
+  footer_line?: string | null;
 }
+
+const DEFAULT_FOOTER = 'Thales Academy Grade 4A — Mr. Reagan';
 
 export default function NewsletterPage() {
   const config = useConfig();
