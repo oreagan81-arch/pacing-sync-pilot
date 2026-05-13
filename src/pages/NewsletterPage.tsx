@@ -58,10 +58,12 @@ export default function NewsletterPage() {
 
   const loadNewsletters = async () => {
     const { data } = await supabase.from('newsletters').select('*').order('created_at', { ascending: false }).limit(20);
-    if (data) setNewsletters(data.map(n => ({
+    if (data) setNewsletters(data.map((n: any) => ({
       ...n,
       extra_sections: (n.extra_sections as any) || [],
-    })));
+      points_of_contact: Array.isArray(n.points_of_contact) ? n.points_of_contact : [],
+      quick_links: Array.isArray(n.quick_links) ? n.quick_links : [],
+    })) as Newsletter[]);
   };
 
   const handleExtract = async () => {
