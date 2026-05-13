@@ -321,6 +321,74 @@ export default function NewsletterPage() {
                 ))}
               </div>
 
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">School News</Label>
+                <Textarea
+                  value={schoolNews}
+                  onChange={(e) => setSchoolNews(e.target.value)}
+                  placeholder="School-wide announcements (HTML allowed)..."
+                  rows={3}
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Points of Contact</label>
+                  <Button size="sm" variant="ghost" onClick={() => setPointsOfContact([...pointsOfContact, { name: '', role: '', email: '' }])}>
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                {pointsOfContact.map((c, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr_auto] gap-2">
+                    <Input placeholder="Name" value={c.name} onChange={e => {
+                      const arr = [...pointsOfContact]; arr[i] = { ...arr[i], name: e.target.value }; setPointsOfContact(arr);
+                    }} className="text-sm" />
+                    <Input placeholder="Role" value={c.role} onChange={e => {
+                      const arr = [...pointsOfContact]; arr[i] = { ...arr[i], role: e.target.value }; setPointsOfContact(arr);
+                    }} className="text-sm" />
+                    <Input placeholder="Email" value={c.email} onChange={e => {
+                      const arr = [...pointsOfContact]; arr[i] = { ...arr[i], email: e.target.value }; setPointsOfContact(arr);
+                    }} className="text-sm" />
+                    <Button size="sm" variant="ghost" onClick={() => setPointsOfContact(pointsOfContact.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Quick Links</label>
+                  <Button size="sm" variant="ghost" onClick={() => setQuickLinks([...quickLinks, { label: '', url: '' }])}>
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                {quickLinks.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
+                    <Input placeholder="Label" value={l.label} onChange={e => {
+                      const arr = [...quickLinks]; arr[i] = { ...arr[i], label: e.target.value }; setQuickLinks(arr);
+                    }} className="text-sm" />
+                    <Input placeholder="https://..." value={l.url} onChange={e => {
+                      const arr = [...quickLinks]; arr[i] = { ...arr[i], url: e.target.value }; setQuickLinks(arr);
+                    }} className="text-sm" />
+                    <Button size="sm" variant="ghost" onClick={() => setQuickLinks(quickLinks.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Footer Line</Label>
+                <Input
+                  value={footerLine}
+                  onChange={(e) => setFooterLine(e.target.value)}
+                  placeholder={DEFAULT_FOOTER}
+                  className="text-sm"
+                />
+              </div>
+
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handlePolish} disabled={polishing} className="gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" /> {polishing ? 'Polishing...' : 'AI Polish'}
