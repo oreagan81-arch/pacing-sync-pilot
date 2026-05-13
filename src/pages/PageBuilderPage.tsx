@@ -8,8 +8,26 @@ import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriang
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
-import { generateCanvasPageHtml, generateHomeroomPageHtml, generateRedirectPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { generateCanvasPageHtml, generateHomeroomPageHtml, generateRedirectPageHtml, type CanvasPageRow, type ContactEntry, type LinkEntry } from '@/lib/canvas-html';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import type { Resource } from '@/types/thales';
+
+function parseSubjectResources(
+  subjectResourcesJson: Record<string, unknown[]> | null | undefined,
+  subject: string,
+): Resource[] {
+  const map = subjectResourcesJson ?? {};
+  const raw = map[subject];
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
+    .filter((r) => typeof r.label === 'string' && (r.label as string).trim() !== '')
+    .map((r) => ({
+      label: r.label as string,
+      url:   typeof r.url === 'string' && (r.url as string).trim() ? r.url as string : undefined,
+      group: typeof r.group === 'string' && (r.group as string).trim() ? r.group as string : undefined,
+    }));
+}
 import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 import { useSystemStore } from '@/store/useSystemStore';
