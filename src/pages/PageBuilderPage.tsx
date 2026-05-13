@@ -301,11 +301,13 @@ export default function PageBuilderPage() {
         quarter: selectedWeek.quarter,
         dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
-        reminders: selectedWeek.reminders || '',
-        resources: selectedWeek.resources || '',
+        calendarReminders: selectedWeek.reminders || '',
         homeroomNotes: latestNewsletter?.homeroom_notes || '',
         birthdays: latestNewsletter?.birthdays || '',
-        upcomingTests: tests,
+        schoolNews: latestNewsletter?.school_news || '',
+        pointsOfContact: latestNewsletter?.points_of_contact ?? [],
+        quickLinks: latestNewsletter?.quick_links ?? [],
+        footer: latestNewsletter?.footer_line ?? 'Thales Academy Grade 4A &mdash; Mr. Reagan',
       });
     } else {
       const activeHs = selectedWeek.active_hs_subject;
