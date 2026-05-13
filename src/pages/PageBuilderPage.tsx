@@ -222,18 +222,22 @@ export default function PageBuilderPage() {
     }
 
     if (subjectRows.length === 0) return '';
+    const subjectReminder = (selectedWeek.subject_reminders ?? {})[activeSubject] ?? '';
+    const subjectResources = parseSubjectResources(selectedWeek.subject_resources, activeSubject);
     return generateCanvasPageHtml({
       subject: activeSubject === 'Reading' ? 'Reading & Spelling' : activeSubject,
       rows: subjectRows,
       quarter: selectedWeek.quarter,
       weekNum: selectedWeek.week_num,
       dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
-      reminders: selectedWeek.reminders || '',
-      resources: selectedWeek.resources || '',
+      subjectReminder,
+      subjectResources,
       quarterColor,
       contentMap,
+      calendarEvents: getWeekEvents(weekDates, calendar),
+      weekDates,
     });
-  }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter]);
+  }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter, weekDates, calendar]);
 
   // Reset preview error when generated HTML changes
   useEffect(() => setPreviewError(false), [generatedHtml]);
