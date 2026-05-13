@@ -300,6 +300,9 @@ export default function PacingEntryPage({
 
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
+  const [subjectReminders, setSubjectReminders] = useState<Record<string, string>>({});
+  const SUBJECT_REMINDER_TABS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
+  const [activeReminderSubject, setActiveReminderSubject] = useState<string>('Math');
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
@@ -412,6 +415,7 @@ export default function PacingEntryPage({
             date_range: dateRange,
             reminders,
             resources,
+            subject_reminders: subjectReminders,
             active_hs_subject: activeHsSubject === 'Both' ? null : activeHsSubject,
           } as any,
           { onConflict: 'quarter,week_num' },
@@ -473,7 +477,7 @@ export default function PacingEntryPage({
       toast.error('Save failed', { description: e.message });
     }
     setSaving(false);
-  }, [activeQuarter, activeWeek, dateRange, reminders, resources, activeHsSubject, weekData, config]);
+  }, [activeQuarter, activeWeek, dateRange, reminders, resources, subjectReminders, activeHsSubject, weekData, config]);
 
   // Cmd/Ctrl+S to save
   useEffect(() => {
@@ -506,6 +510,8 @@ export default function PacingEntryPage({
       // Reset manual override flag on load — let auto-fill take over
       datesEditedByUser.current = false;
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
+      const sr = (weekData2 as any).subject_reminders;
+      setSubjectReminders(sr && typeof sr === 'object' && !Array.isArray(sr) ? (sr as Record<string, string>) : {});
     }
 
     if (rows) {
@@ -550,13 +556,36 @@ export default function PacingEntryPage({
   }, [savedWeeks, activeQuarter, activeWeek, loadWeekById]);
 
   const handleAutoRemind = () => {
-    const auto = buildAutoReminders(weekData);
-    if (auto) {
-      setReminders((prev) => (prev ? prev + '\n' + auto : auto));
-      toast.success('Reminders auto-filled from tests');
-    } else {
-      toast.info('No tests found this week');
+    // Per-subject test reminders → write into subjectReminders[subject]
+    const perSubject: Record<string, string[]> = {};
+    let count = 0;
+    for (const subj of SUBJECTS) {
+      for (const day of DAYS) {
+        const d = weekData[subj][day];
+        if (!d) continue;
+        const isTest = (d.type || '').toLowerCase().includes('test') ||
+          (d.in_class || '').toLowerCase().includes('test');
+        if (!isTest) continue;
+        const line = `${subj} test on ${day}${d.lesson_num ? ` — ${d.lesson_num}` : ''}`;
+        (perSubject[subj] ||= []).push(line);
+        count++;
+      }
     }
+    if (count === 0) {
+      toast.info('No tests found this week');
+      return;
+    }
+    setSubjectReminders((prev) => {
+      const next = { ...prev };
+      for (const [subj, lines] of Object.entries(perSubject)) {
+        const existing = next[subj] || '';
+        const append = lines.join('\n');
+        next[subj] = existing ? `${existing}\n${append}` : append;
+      }
+      return next;
+    });
+    setIsDirty(true);
+    toast.success(`Auto-filled ${count} test reminder(s) per subject`);
   };
 
   // ─── AI Parse ───
@@ -1080,21 +1109,59 @@ export default function PacingEntryPage({
       {/* SECTION C: Editable grid + week-level fields */}
       {/* ───────────────────────────────────────── */}
       <div className="space-y-4">
-        {/* Reminders + Resources */}
+        {/* Per-Subject Reminders (tabs) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Per-Subject Reminders
+            </label>
+            <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
+              <Zap className="h-3 w-3" /> Auto-fill Tests
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SUBJECT_REMINDER_TABS.map((s) => {
+              const has = (subjectReminders[s] || '').trim().length > 0;
+              const active = activeReminderSubject === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setActiveReminderSubject(s)}
+                  className={`px-2 py-1 rounded text-[11px] border transition ${
+                    active
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/30 border-border hover:bg-muted/60'
+                  }`}
+                >
+                  {s}{has ? ' •' : ''}
+                </button>
+              );
+            })}
+          </div>
+          <Textarea
+            value={subjectReminders[activeReminderSubject] || ''}
+            onChange={(e) => {
+              setSubjectReminders((prev) => ({ ...prev, [activeReminderSubject]: e.target.value }));
+              setIsDirty(true);
+            }}
+            placeholder={`Reminders shown on the ${activeReminderSubject} Canvas page (one per line)`}
+            className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
+            style={{ borderLeftColor: '#c51062' }}
+            rows={3}
+          />
+        </div>
+
+        {/* Homeroom calendar reminders + Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Reminders
-              </label>
-              <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
-                <Zap className="h-3 w-3" /> Auto-fill Tests
-              </Button>
-            </div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Homeroom — Mark Your Calendars
+            </label>
             <Textarea
               value={reminders}
               onChange={(e) => { setReminders(e.target.value); setIsDirty(true); }}
-              placeholder="One reminder per line..."
+              placeholder="Calendar items shown only in the Homeroom newsletter..."
               className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
               style={{ borderLeftColor: '#c51062' }}
               rows={3}

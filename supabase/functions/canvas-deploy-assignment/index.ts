@@ -134,17 +134,20 @@ Deno.serve(async (req) => {
     if (!guardSynthetic && !force && dueDate && !blockedReason) {
       const { data: cal } = await sb
         .from("school_calendar")
-        .select("event_type, label")
+        .select("event_type, label, cancels_instruction")
         .eq("date", dueDate)
         .maybeSingle();
-      if (cal && ["testing_window", "holiday", "track_out", "teacher_workday"].includes(cal.event_type)) {
+
+      if (cal && cal.cancels_instruction === true) {
         const labelMap: Record<string, string> = {
-          testing_window: "CLT Testing",
-          holiday: "Holiday",
-          track_out: "Track Out",
+          holiday:         "Holiday",
+          track_out:       "Track Out",
           teacher_workday: "Teacher Workday",
+          no_school:       "No School",
+          half_day:        "Half Day",
+          early_release:   "Early Release",
         };
-        blockedReason = `${labelMap[cal.event_type]} — non-instructional day (${cal.label})`;
+        blockedReason = `${labelMap[cal.event_type] ?? cal.event_type} — non-instructional day (${cal.label})`;
       }
     }
     if (blockedReason) {

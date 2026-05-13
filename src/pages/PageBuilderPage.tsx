@@ -8,8 +8,26 @@ import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriang
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useConfig } from '@/lib/config';
-import { generateCanvasPageHtml, generateHomeroomPageHtml, generateRedirectPageHtml, type CanvasPageRow } from '@/lib/canvas-html';
+import { generateCanvasPageHtml, generateHomeroomPageHtml, generateRedirectPageHtml, type CanvasPageRow, type ContactEntry, type LinkEntry } from '@/lib/canvas-html';
 import type { ContentMapEntry } from '@/lib/auto-link';
+import type { Resource } from '@/types/thales';
+
+function parseSubjectResources(
+  subjectResourcesJson: Record<string, unknown[]> | null | undefined,
+  subject: string,
+): Resource[] {
+  const map = subjectResourcesJson ?? {};
+  const raw = map[subject];
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
+    .filter((r) => typeof r.label === 'string' && (r.label as string).trim() !== '')
+    .map((r) => ({
+      label: r.label as string,
+      url:   typeof r.url === 'string' && (r.url as string).trim() ? r.url as string : undefined,
+      group: typeof r.group === 'string' && (r.group as string).trim() ? r.group as string : undefined,
+    }));
+}
 import { callEdge } from '@/lib/edge';
 import { useRealtimeDeploy } from '@/hooks/use-realtime-deploy';
 import { useSystemStore } from '@/store/useSystemStore';
@@ -44,6 +62,8 @@ interface WeekOption {
   date_range: string | null;
   reminders: string | null;
   resources: string | null;
+  subject_reminders: Record<string, string> | null;
+  subject_resources: Record<string, unknown[]> | null;
   active_hs_subject?: string | null;
 }
 
@@ -60,7 +80,14 @@ export default function PageBuilderPage() {
   const [selectedWeek, setSelectedWeek] = useState<WeekOption | null>(null);
   const [savedRows, setSavedRows] = useState<CanvasPageRow[]>([]);
   const [contentMap, setContentMap] = useState<ContentMapEntry[]>([]);
-  const [latestNewsletter, setLatestNewsletter] = useState<{ homeroom_notes: string | null; birthdays: string | null } | null>(null);
+  const [latestNewsletter, setLatestNewsletter] = useState<{
+    homeroom_notes: string | null;
+    birthdays: string | null;
+    school_news?: string | null;
+    points_of_contact?: ContactEntry[];
+    quick_links?: LinkEntry[];
+    footer_line?: string | null;
+  } | null>(null);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
@@ -85,7 +112,7 @@ export default function PageBuilderPage() {
 
   const refreshWeeks = useCallback(() => {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
-      if (data) setWeeks(data);
+      if (data) setWeeks(data as unknown as WeekOption[]);
     });
   }, []);
 
@@ -97,11 +124,11 @@ export default function PageBuilderPage() {
     });
     supabase
       .from('newsletters')
-      .select('homeroom_notes, birthdays')
+      .select('homeroom_notes, birthdays, school_news, points_of_contact, quick_links, footer_line')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => setLatestNewsletter(data ?? null));
+      .then(({ data }) => setLatestNewsletter((data as any) ?? null));
   }, [refreshWeeks]);
 
   useEffect(() => {
@@ -151,6 +178,11 @@ export default function PageBuilderPage() {
     return filterTogetherPageRows(rows, activeSubject);
   }, [rows, activeSubject]);
 
+  const weekDates = useMemo(() => {
+    if (!selectedWeek) return [] as string[];
+    return getPacingWeekDatesISO(selectedWeek.quarter, selectedWeek.week_num);
+  }, [selectedWeek]);
+
   // Generate HTML for active subject
   const generatedHtml = useMemo(() => {
     if (!selectedWeek || !config) return '';
@@ -166,11 +198,13 @@ export default function PageBuilderPage() {
         quarter: selectedWeek.quarter,
         dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
-        reminders: selectedWeek.reminders || '',
-        resources: selectedWeek.resources || '',
+        calendarReminders: selectedWeek.reminders || '',
         homeroomNotes: latestNewsletter?.homeroom_notes || '',
         birthdays: latestNewsletter?.birthdays || '',
-        upcomingTests: tests,
+        schoolNews: latestNewsletter?.school_news || '',
+        pointsOfContact: latestNewsletter?.points_of_contact ?? [],
+        quickLinks: latestNewsletter?.quick_links ?? [],
+        footer: latestNewsletter?.footer_line ?? 'Thales Academy Grade 4A &mdash; Mr. Reagan',
       });
     }
 
@@ -188,18 +222,22 @@ export default function PageBuilderPage() {
     }
 
     if (subjectRows.length === 0) return '';
+    const subjectReminder = (selectedWeek.subject_reminders ?? {})[activeSubject] ?? '';
+    const subjectResources = parseSubjectResources(selectedWeek.subject_resources, activeSubject);
     return generateCanvasPageHtml({
       subject: activeSubject === 'Reading' ? 'Reading & Spelling' : activeSubject,
       rows: subjectRows,
       quarter: selectedWeek.quarter,
       weekNum: selectedWeek.week_num,
       dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
-      reminders: selectedWeek.reminders || '',
-      resources: selectedWeek.resources || '',
+      subjectReminder,
+      subjectResources,
       quarterColor,
       contentMap,
+      calendarEvents: getWeekEvents(weekDates, calendar),
+      weekDates,
     });
-  }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter]);
+  }, [subjectRows, rows, selectedWeek, activeSubject, config, contentMap, latestNewsletter, weekDates, calendar]);
 
   // Reset preview error when generated HTML changes
   useEffect(() => setPreviewError(false), [generatedHtml]);
@@ -263,11 +301,13 @@ export default function PageBuilderPage() {
         quarter: selectedWeek.quarter,
         dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
         quarterColor,
-        reminders: selectedWeek.reminders || '',
-        resources: selectedWeek.resources || '',
+        calendarReminders: selectedWeek.reminders || '',
         homeroomNotes: latestNewsletter?.homeroom_notes || '',
         birthdays: latestNewsletter?.birthdays || '',
-        upcomingTests: tests,
+        schoolNews: latestNewsletter?.school_news || '',
+        pointsOfContact: latestNewsletter?.points_of_contact ?? [],
+        quickLinks: latestNewsletter?.quick_links ?? [],
+        footer: latestNewsletter?.footer_line ?? 'Thales Academy Grade 4A &mdash; Mr. Reagan',
       });
     } else {
       const activeHs = selectedWeek.active_hs_subject;
@@ -295,16 +335,20 @@ export default function PageBuilderPage() {
 
         courseId = resolveTogetherCourseId(subject) ?? config.courseIds[subject];
 
+        const subjectReminderD = (selectedWeek.subject_reminders ?? {})[subject] ?? '';
+        const subjectResourcesD = parseSubjectResources(selectedWeek.subject_resources, subject);
         html = generateCanvasPageHtml({
           subject: subject === 'Reading' ? 'Reading & Spelling' : subject,
           rows: sRows,
           quarter: selectedWeek.quarter,
           weekNum: selectedWeek.week_num,
           dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
-          reminders: selectedWeek.reminders || '',
-          resources: selectedWeek.resources || '',
+          subjectReminder: subjectReminderD,
+          subjectResources: subjectResourcesD,
           quarterColor,
           contentMap,
+          calendarEvents: getWeekEvents(weekDates, calendar),
+          weekDates,
         });
       }
     }

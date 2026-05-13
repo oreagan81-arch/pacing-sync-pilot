@@ -12,6 +12,9 @@ import { callEdge } from '@/lib/edge';
 import { Label } from '@/components/ui/label';
 import { generateHomeroomPageHtml } from '@/lib/canvas-html';
 
+interface ContactEntry { name: string; role: string; email: string }
+interface LinkEntry { label: string; url: string }
+
 interface Newsletter {
   id: string;
   date_range: string | null;
@@ -22,7 +25,13 @@ interface Newsletter {
   status: string | null;
   posted_at: string | null;
   created_at: string | null;
+  school_news?: string | null;
+  points_of_contact?: ContactEntry[];
+  quick_links?: LinkEntry[];
+  footer_line?: string | null;
 }
+
+const DEFAULT_FOOTER = 'Thales Academy Grade 4A — Mr. Reagan';
 
 export default function NewsletterPage() {
   const config = useConfig();
@@ -42,6 +51,10 @@ export default function NewsletterPage() {
   const [activeNewsletterId, setActiveNewsletterId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [polishing, setPolishing] = useState(false);
+  const [schoolNews, setSchoolNews] = useState('');
+  const [pointsOfContact, setPointsOfContact] = useState<ContactEntry[]>([]);
+  const [quickLinks, setQuickLinks] = useState<LinkEntry[]>([]);
+  const [footerLine, setFooterLine] = useState<string>(DEFAULT_FOOTER);
 
   useEffect(() => {
     loadNewsletters();
@@ -49,10 +62,12 @@ export default function NewsletterPage() {
 
   const loadNewsletters = async () => {
     const { data } = await supabase.from('newsletters').select('*').order('created_at', { ascending: false }).limit(20);
-    if (data) setNewsletters(data.map(n => ({
+    if (data) setNewsletters(data.map((n: any) => ({
       ...n,
       extra_sections: (n.extra_sections as any) || [],
-    })));
+      points_of_contact: Array.isArray(n.points_of_contact) ? n.points_of_contact : [],
+      quick_links: Array.isArray(n.quick_links) ? n.quick_links : [],
+    })) as Newsletter[]);
   };
 
   const handleExtract = async () => {
@@ -107,11 +122,13 @@ export default function NewsletterPage() {
       quarter: '',
       dateRange: dateRange || 'This Week',
       quarterColor: '#6644bb',
-      reminders: calendarEvents,
-      resources: extraSections.map(s => `${s.title} | ${s.body}`).join('\n'),
+      calendarReminders: calendarEvents,
       homeroomNotes,
       birthdays,
-      upcomingTests: [],
+      schoolNews,
+      pointsOfContact,
+      quickLinks,
+      footer: footerLine || DEFAULT_FOOTER,
     });
     setHtmlContent(html);
     setPreviewMode('preview');
@@ -129,6 +146,10 @@ export default function NewsletterPage() {
       extra_sections: allSections,
       html_content: htmlContent,
       status: 'DRAFT',
+      school_news: schoolNews,
+      points_of_contact: pointsOfContact as any,
+      quick_links: quickLinks as any,
+      footer_line: footerLine || DEFAULT_FOOTER,
     };
 
     if (activeNewsletterId) {
@@ -159,6 +180,10 @@ export default function NewsletterPage() {
         extra_sections: allSections,
         html_content: htmlContent,
         status: 'QUEUED',
+        school_news: schoolNews,
+        points_of_contact: pointsOfContact as any,
+        quick_links: quickLinks as any,
+        footer_line: footerLine || DEFAULT_FOOTER,
       };
       if (activeNewsletterId) {
         await supabase.from('newsletters').update(payload).eq('id', activeNewsletterId);
@@ -186,6 +211,10 @@ export default function NewsletterPage() {
     setCalendarEvents(calSection?.body || '');
     setExtraSections(sections.filter(s => s.title !== 'Mark Your Calendars'));
     setHtmlContent(n.html_content || '');
+    setSchoolNews(n.school_news || '');
+    setPointsOfContact(Array.isArray(n.points_of_contact) ? n.points_of_contact : []);
+    setQuickLinks(Array.isArray(n.quick_links) ? n.quick_links : []);
+    setFooterLine(n.footer_line || DEFAULT_FOOTER);
     setPreviewMode('edit');
     toast.success('Loaded newsletter');
   };
@@ -194,6 +223,7 @@ export default function NewsletterPage() {
     setActiveNewsletterId(null);
     setDateRange(''); setHomeroomNotes(''); setBirthdays('');
     setExtraSections([]); setCalendarEvents(''); setHtmlContent(''); setPastedText('');
+    setSchoolNews(''); setPointsOfContact([]); setQuickLinks([]); setFooterLine(DEFAULT_FOOTER);
     setPreviewMode('edit');
   };
 
@@ -289,6 +319,74 @@ export default function NewsletterPage() {
                     </Button>
                   </div>
                 ))}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">School News</Label>
+                <Textarea
+                  value={schoolNews}
+                  onChange={(e) => setSchoolNews(e.target.value)}
+                  placeholder="School-wide announcements (HTML allowed)..."
+                  rows={3}
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Points of Contact</label>
+                  <Button size="sm" variant="ghost" onClick={() => setPointsOfContact([...pointsOfContact, { name: '', role: '', email: '' }])}>
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                {pointsOfContact.map((c, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr_auto] gap-2">
+                    <Input placeholder="Name" value={c.name} onChange={e => {
+                      const arr = [...pointsOfContact]; arr[i] = { ...arr[i], name: e.target.value }; setPointsOfContact(arr);
+                    }} className="text-sm" />
+                    <Input placeholder="Role" value={c.role} onChange={e => {
+                      const arr = [...pointsOfContact]; arr[i] = { ...arr[i], role: e.target.value }; setPointsOfContact(arr);
+                    }} className="text-sm" />
+                    <Input placeholder="Email" value={c.email} onChange={e => {
+                      const arr = [...pointsOfContact]; arr[i] = { ...arr[i], email: e.target.value }; setPointsOfContact(arr);
+                    }} className="text-sm" />
+                    <Button size="sm" variant="ghost" onClick={() => setPointsOfContact(pointsOfContact.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Quick Links</label>
+                  <Button size="sm" variant="ghost" onClick={() => setQuickLinks([...quickLinks, { label: '', url: '' }])}>
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                {quickLinks.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
+                    <Input placeholder="Label" value={l.label} onChange={e => {
+                      const arr = [...quickLinks]; arr[i] = { ...arr[i], label: e.target.value }; setQuickLinks(arr);
+                    }} className="text-sm" />
+                    <Input placeholder="https://..." value={l.url} onChange={e => {
+                      const arr = [...quickLinks]; arr[i] = { ...arr[i], url: e.target.value }; setQuickLinks(arr);
+                    }} className="text-sm" />
+                    <Button size="sm" variant="ghost" onClick={() => setQuickLinks(quickLinks.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Footer Line</Label>
+                <Input
+                  value={footerLine}
+                  onChange={(e) => setFooterLine(e.target.value)}
+                  placeholder={DEFAULT_FOOTER}
+                  className="text-sm"
+                />
               </div>
 
               <div className="flex gap-2">
