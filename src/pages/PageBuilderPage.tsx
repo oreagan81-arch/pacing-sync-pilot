@@ -112,7 +112,7 @@ export default function PageBuilderPage() {
 
   const refreshWeeks = useCallback(() => {
     supabase.from('weeks').select('*').order('quarter').order('week_num').then(({ data }) => {
-      if (data) setWeeks(data);
+      if (data) setWeeks(data as unknown as WeekOption[]);
     });
   }, []);
 
