@@ -57,8 +57,8 @@ Deno.serve(async (req) => {
     // and only at/after 4 PM ET. Scheduled posts (delayedPostAt) bypass —
     // Canvas honors their own delay. This only gates immediate posts.
     if (!delayedPostAt) {
-      const { weekday, hour } = nowInET();
-      if (weekday === "Fri") {
+      const { isFriday, hour } = nowInET();
+      if (isFriday) {
         const isReminder = (type ?? "").toLowerCase() === "reminder";
         if (!isReminder || hour < 16) {
           await sb.from("deploy_log").insert({
