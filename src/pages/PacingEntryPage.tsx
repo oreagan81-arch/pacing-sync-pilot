@@ -556,13 +556,36 @@ export default function PacingEntryPage({
   }, [savedWeeks, activeQuarter, activeWeek, loadWeekById]);
 
   const handleAutoRemind = () => {
-    const auto = buildAutoReminders(weekData);
-    if (auto) {
-      setReminders((prev) => (prev ? prev + '\n' + auto : auto));
-      toast.success('Reminders auto-filled from tests');
-    } else {
-      toast.info('No tests found this week');
+    // Per-subject test reminders → write into subjectReminders[subject]
+    const perSubject: Record<string, string[]> = {};
+    let count = 0;
+    for (const subj of SUBJECTS) {
+      for (const day of DAYS) {
+        const d = weekData[subj][day];
+        if (!d) continue;
+        const isTest = (d.type || '').toLowerCase().includes('test') ||
+          (d.in_class || '').toLowerCase().includes('test');
+        if (!isTest) continue;
+        const line = `${subj} test on ${day}${d.lesson_num ? ` — ${d.lesson_num}` : ''}`;
+        (perSubject[subj] ||= []).push(line);
+        count++;
+      }
     }
+    if (count === 0) {
+      toast.info('No tests found this week');
+      return;
+    }
+    setSubjectReminders((prev) => {
+      const next = { ...prev };
+      for (const [subj, lines] of Object.entries(perSubject)) {
+        const existing = next[subj] || '';
+        const append = lines.join('\n');
+        next[subj] = existing ? `${existing}\n${append}` : append;
+      }
+      return next;
+    });
+    setIsDirty(true);
+    toast.success(`Auto-filled ${count} test reminder(s) per subject`);
   };
 
   // ─── AI Parse ───
