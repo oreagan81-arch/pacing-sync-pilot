@@ -415,6 +415,7 @@ export default function PacingEntryPage({
             date_range: dateRange,
             reminders,
             resources,
+            subject_reminders: subjectReminders,
             active_hs_subject: activeHsSubject === 'Both' ? null : activeHsSubject,
           } as any,
           { onConflict: 'quarter,week_num' },
