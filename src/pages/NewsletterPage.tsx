@@ -211,6 +211,10 @@ export default function NewsletterPage() {
     setCalendarEvents(calSection?.body || '');
     setExtraSections(sections.filter(s => s.title !== 'Mark Your Calendars'));
     setHtmlContent(n.html_content || '');
+    setSchoolNews(n.school_news || '');
+    setPointsOfContact(Array.isArray(n.points_of_contact) ? n.points_of_contact : []);
+    setQuickLinks(Array.isArray(n.quick_links) ? n.quick_links : []);
+    setFooterLine(n.footer_line || DEFAULT_FOOTER);
     setPreviewMode('edit');
     toast.success('Loaded newsletter');
   };
@@ -219,6 +223,7 @@ export default function NewsletterPage() {
     setActiveNewsletterId(null);
     setDateRange(''); setHomeroomNotes(''); setBirthdays('');
     setExtraSections([]); setCalendarEvents(''); setHtmlContent(''); setPastedText('');
+    setSchoolNews(''); setPointsOfContact([]); setQuickLinks([]); setFooterLine(DEFAULT_FOOTER);
     setPreviewMode('edit');
   };
 
