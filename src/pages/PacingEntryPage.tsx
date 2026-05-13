@@ -510,6 +510,8 @@ export default function PacingEntryPage({
       // Reset manual override flag on load — let auto-fill take over
       datesEditedByUser.current = false;
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
+      const sr = (weekData2 as any).subject_reminders;
+      setSubjectReminders(sr && typeof sr === 'object' && !Array.isArray(sr) ? (sr as Record<string, string>) : {});
     }
 
     if (rows) {
