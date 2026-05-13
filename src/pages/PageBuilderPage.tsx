@@ -335,16 +335,20 @@ export default function PageBuilderPage() {
 
         courseId = resolveTogetherCourseId(subject) ?? config.courseIds[subject];
 
+        const subjectReminderD = (selectedWeek.subject_reminders ?? {})[subject] ?? '';
+        const subjectResourcesD = parseSubjectResources(selectedWeek.subject_resources, subject);
         html = generateCanvasPageHtml({
           subject: subject === 'Reading' ? 'Reading & Spelling' : subject,
           rows: sRows,
           quarter: selectedWeek.quarter,
           weekNum: selectedWeek.week_num,
           dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
-          reminders: selectedWeek.reminders || '',
-          resources: selectedWeek.resources || '',
+          subjectReminder: subjectReminderD,
+          subjectResources: subjectResourcesD,
           quarterColor,
           contentMap,
+          calendarEvents: getWeekEvents(weekDates, calendar),
+          weekDates,
         });
       }
     }
