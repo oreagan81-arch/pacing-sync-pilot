@@ -477,7 +477,7 @@ export default function PacingEntryPage({
       toast.error('Save failed', { description: e.message });
     }
     setSaving(false);
-  }, [activeQuarter, activeWeek, dateRange, reminders, resources, activeHsSubject, weekData, config]);
+  }, [activeQuarter, activeWeek, dateRange, reminders, resources, subjectReminders, activeHsSubject, weekData, config]);
 
   // Cmd/Ctrl+S to save
   useEffect(() => {
