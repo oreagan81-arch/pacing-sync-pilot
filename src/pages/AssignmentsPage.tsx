@@ -524,7 +524,7 @@ export default function AssignmentsPage() {
         return generateCanvasPageHtml({
           subject: subj === 'Reading' ? 'Reading & Spelling' : subj,
           rows: sRows, quarter: Q, weekNum: W, dateRange,
-          reminders: '', resources: '', quarterColor, contentMap,
+          subjectReminder: '', subjectResources: [], quarterColor, contentMap,
         });
       };
       const pageHtml: Record<string, string> = {
