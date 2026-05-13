@@ -146,6 +146,10 @@ export default function NewsletterPage() {
       extra_sections: allSections,
       html_content: htmlContent,
       status: 'DRAFT',
+      school_news: schoolNews,
+      points_of_contact: pointsOfContact as any,
+      quick_links: quickLinks as any,
+      footer_line: footerLine || DEFAULT_FOOTER,
     };
 
     if (activeNewsletterId) {
