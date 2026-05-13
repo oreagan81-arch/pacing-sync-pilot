@@ -51,6 +51,10 @@ export default function NewsletterPage() {
   const [activeNewsletterId, setActiveNewsletterId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [polishing, setPolishing] = useState(false);
+  const [schoolNews, setSchoolNews] = useState('');
+  const [pointsOfContact, setPointsOfContact] = useState<ContactEntry[]>([]);
+  const [quickLinks, setQuickLinks] = useState<LinkEntry[]>([]);
+  const [footerLine, setFooterLine] = useState<string>(DEFAULT_FOOTER);
 
   useEffect(() => {
     loadNewsletters();
