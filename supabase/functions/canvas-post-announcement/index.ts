@@ -175,6 +175,21 @@ Deno.serve(async (req) => {
       message: `Posted announcement: ${title}`,
     });
 
+    // Write posted_at + canvas_url back to announcements table.
+    if (weekId && subject && type) {
+      await sb
+        .from("announcements")
+        .update({
+          posted_at: new Date().toISOString(),
+          canvas_url: canvasUrl,
+          status: "POSTED",
+        })
+        .eq("week_id", weekId)
+        .eq("subject", subject)
+        .eq("type", type)
+        .is("posted_at", null);
+    }
+
     return new Response(JSON.stringify({ status: "DEPLOYED", canvasUrl }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
