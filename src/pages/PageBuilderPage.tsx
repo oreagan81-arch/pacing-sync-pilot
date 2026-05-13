@@ -124,11 +124,11 @@ export default function PageBuilderPage() {
     });
     supabase
       .from('newsletters')
-      .select('homeroom_notes, birthdays')
+      .select('homeroom_notes, birthdays, school_news, points_of_contact, quick_links, footer_line')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => setLatestNewsletter(data ?? null));
+      .then(({ data }) => setLatestNewsletter((data as any) ?? null));
   }, [refreshWeeks]);
 
   useEffect(() => {
