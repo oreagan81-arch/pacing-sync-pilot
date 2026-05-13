@@ -107,11 +107,9 @@ export default function NewsletterPage() {
       quarter: '',
       dateRange: dateRange || 'This Week',
       quarterColor: '#6644bb',
-      reminders: calendarEvents,
-      resources: extraSections.map(s => `${s.title} | ${s.body}`).join('\n'),
+      calendarReminders: calendarEvents,
       homeroomNotes,
       birthdays,
-      upcomingTests: [],
     });
     setHtmlContent(html);
     setPreviewMode('preview');
