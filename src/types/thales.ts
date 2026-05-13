@@ -23,6 +23,7 @@ export type Day = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
 export interface Resource {
   label: string;
   url?: string;
+  group?: string; // Optional section header, e.g. "Study Guides", "Power Ups"
 }
 
 /**
