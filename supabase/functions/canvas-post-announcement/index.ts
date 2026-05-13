@@ -6,20 +6,19 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Returns the current hour (0-23) in America/New_York and the weekday short name.
-function nowInET(): { weekday: string; hour: number } {
-  const fmt = new Intl.DateTimeFormat("en-US", {
+function nowInET(): { isFriday: boolean; hour: number } {
+  const now = new Date();
+  const etString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+  const etDate = new Date(etString);
+  const isFriday = etDate.getDay() === 5;
+  const hourParts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
-    weekday: "short",
     hour: "2-digit",
     hour12: false,
-  });
-  const parts = fmt.formatToParts(new Date());
-  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
-  const hourStr = parts.find((p) => p.type === "hour")?.value ?? "0";
-  // Intl may return "24" for midnight in some locales; normalize.
+  }).formatToParts(now);
+  const hourStr = hourParts.find((p) => p.type === "hour")?.value ?? "0";
   const hour = Math.min(23, parseInt(hourStr, 10) || 0);
-  return { weekday, hour };
+  return { isFriday, hour };
 }
 
 Deno.serve(async (req) => {
