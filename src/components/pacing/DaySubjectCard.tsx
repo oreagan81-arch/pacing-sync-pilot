@@ -80,7 +80,7 @@ export function DaySubjectCard({
 
   const isTest = cell.type?.toLowerCase().includes('test') ?? false;
   const isReview = cell.in_class?.toLowerCase().includes('review') ?? false;
-  const isNoClass = cell.type === '-' || cell.type === 'No Class';
+  const isNoClass = cell.type === '-' || cell.type === 'No Class' || cell.type === 'CLT Testing';
   const isInvestigation = subject === 'Math' && cell.type === 'Investigation';
   const isEven = cell.lesson_num ? parseInt(cell.lesson_num) % 2 === 0 : null;
 

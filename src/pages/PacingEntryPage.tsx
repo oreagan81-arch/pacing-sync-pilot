@@ -28,12 +28,12 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
 const SCHOOL_YEAR = '2025-2026';
 
 const SUBJECT_TYPES: Record<string, string[]> = {
-  Math: ['Lesson', 'Investigation', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
-  Reading: ['Lesson', 'Test', 'Checkout', 'No Class', '-'],
-  Spelling: ['Lesson', 'Test', 'No Class', '-'],
-  'Language Arts': ['Lesson', 'CP', 'Test', 'No Class', '-'],
-  History: ['Lesson', 'Test', 'No Class', '-'],
-  Science: ['Lesson', 'Test', 'No Class', '-'],
+  Math:            ['Lesson', 'Investigation', 'Test', 'Fact Test', 'Study Guide', 'CLT Testing', 'No Class', '-'],
+  Reading:         ['Lesson', 'Test', 'Checkout', 'CLT Testing', 'No Class', '-'],
+  Spelling:        ['Lesson', 'Test', 'CLT Testing', 'No Class', '-'],
+  'Language Arts': ['Lesson', 'CP', 'Test', 'CLT Testing', 'No Class', '-'],
+  History:         ['Lesson', 'Test', 'CLT Testing', 'No Class', '-'],
+  Science:         ['Lesson', 'Test', 'CLT Testing', 'No Class', '-'],
 };
 
 const LA_ASSIGNABLE_TYPES = new Set(['CP', 'Classroom Practice', 'Test']);
@@ -301,6 +301,10 @@ export default function PacingEntryPage({
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
   const [subjectReminders, setSubjectReminders] = useState<Record<string, string>>({});
+  const [subjectResources, setSubjectResources] = useState<
+    Record<string, Array<{ label: string; url?: string; group?: string }>>
+  >({});
+  const [activeResourceSubject, setActiveResourceSubject] = useState<string>('Math');
   const SUBJECT_REMINDER_TABS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
   const [activeReminderSubject, setActiveReminderSubject] = useState<string>('Math');
   const [saving, setSaving] = useState(false);
@@ -416,6 +420,7 @@ export default function PacingEntryPage({
             reminders,
             resources,
             subject_reminders: subjectReminders,
+            subject_resources: subjectResources,
             active_hs_subject: activeHsSubject === 'Both' ? null : activeHsSubject,
           } as any,
           { onConflict: 'quarter,week_num' },
@@ -452,7 +457,7 @@ export default function PacingEntryPage({
                 .join('\n');
               return matched || d.resources || null;
             })(),
-            create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
+            create_assign: isNoAssign || isFriday || laBlocked || d.type === 'CLT Testing' ? false : d.create_assign,
             hint_override: d.hint_override ?? null,
           };
         }),
@@ -477,7 +482,7 @@ export default function PacingEntryPage({
       toast.error('Save failed', { description: e.message });
     }
     setSaving(false);
-  }, [activeQuarter, activeWeek, dateRange, reminders, resources, subjectReminders, activeHsSubject, weekData, config]);
+  }, [activeQuarter, activeWeek, dateRange, reminders, resources, subjectReminders, subjectResources, activeHsSubject, weekData, config]);
 
   // Cmd/Ctrl+S to save
   useEffect(() => {
@@ -512,6 +517,12 @@ export default function PacingEntryPage({
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
       const sr = (weekData2 as any).subject_reminders;
       setSubjectReminders(sr && typeof sr === 'object' && !Array.isArray(sr) ? (sr as Record<string, string>) : {});
+      const sres = (weekData2 as any).subject_resources;
+      setSubjectResources(
+        sres && typeof sres === 'object' && !Array.isArray(sres)
+          ? (sres as Record<string, Array<{ label: string; url?: string; group?: string }>>)
+          : {}
+      );
     }
 
     if (rows) {
@@ -531,8 +542,7 @@ export default function PacingEntryPage({
       }
       setWeekData(newData);
 
-      if (weekData2?.reminders) setReminders(weekData2.reminders);
-      else setReminders(buildAutoReminders(newData));
+      setReminders(weekData2?.reminders || '');
 
       const refs = buildAllResourceRefs(rows);
       const matched = contentMap.filter((r) => refs.has(r.lesson_ref)).map((r) => r.canonical_name).join('\n');
@@ -1150,6 +1160,74 @@ export default function PacingEntryPage({
             style={{ borderLeftColor: '#c51062' }}
             rows={3}
           />
+        </div>
+
+        {/* Per-Subject Resources */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Per-Subject Resources
+            </label>
+            <span className="text-[10px] text-muted-foreground italic">
+              Group · Label · Canvas URL
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SUBJECT_REMINDER_TABS.map((s) => {
+              const count = subjectResources[s]?.filter(r => r.label.trim()).length ?? 0;
+              const active = activeResourceSubject === s;
+              return (
+                <button key={s} type="button"
+                  onClick={() => setActiveResourceSubject(s)}
+                  className={`px-2 py-1 rounded text-[11px] border transition ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 border-border hover:bg-muted/60'}`}>
+                  {s}{count > 0 ? ` (${count})` : ''}
+                </button>
+              );
+            })}
+          </div>
+          <div className="space-y-1.5">
+            {(subjectResources[activeResourceSubject] ?? []).map((r, i) => (
+              <div key={i} className="flex gap-1 items-center">
+                <Input placeholder="Group" value={r.group ?? ''} className="w-24 text-xs h-7"
+                  onChange={(e) => {
+                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
+                    updated[i] = { ...updated[i], group: e.target.value || undefined };
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }} />
+                <Input placeholder="File label *" value={r.label} className="flex-1 text-xs h-7"
+                  onChange={(e) => {
+                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
+                    updated[i] = { ...updated[i], label: e.target.value };
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }} />
+                <Input placeholder="https://thalesacademy.instructure.com/..." value={r.url ?? ''} className="flex-1 text-xs h-7"
+                  onChange={(e) => {
+                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
+                    updated[i] = { ...updated[i], url: e.target.value || undefined };
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }} />
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
+                  onClick={() => {
+                    const updated = (subjectResources[activeResourceSubject] ?? []).filter((_, j) => j !== i);
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+            <Button size="sm" variant="outline" className="text-xs h-7 mt-1"
+              onClick={() => {
+                const updated = [...(subjectResources[activeResourceSubject] ?? []), { label: '', url: undefined, group: undefined }];
+                setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                setIsDirty(true);
+              }}>
+              + Add Resource
+            </Button>
+          </div>
         </div>
 
         {/* Homeroom calendar reminders + Resources */}
