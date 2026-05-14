@@ -325,6 +325,7 @@ export default function PageBuilderPage() {
           quarter: selectedWeek.quarter,
           dateRange: selectedWeek.date_range || deriveDateRange(selectedWeek.quarter, selectedWeek.week_num),
           quarterColor,
+          reminderOverride: (selectedWeek.subject_reminders ?? {})[subject] || undefined,
         });
       } else {
         sRows = filterTogetherPageRows(rows, subject);
