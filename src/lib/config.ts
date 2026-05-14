@@ -42,7 +42,23 @@ export async function loadConfig(): Promise<AppConfig> {
     .eq('id', 'current')
     .single();
 
-  if (error || !data) throw new Error('Failed to load system config');
+  if (error || !data) {
+    console.warn('system_config row missing — using built-in defaults');
+    return {
+      courseIds: { Math: 21957, Reading: 21919, Spelling: 21919, 'Language Arts': 21944, History: 21934, Science: 21970, Homeroom: 22254 },
+      assignmentPrefixes: { Math: 'SM5', Reading: 'RM4', Spelling: 'SP', 'Language Arts': 'ELA4A', History: 'Hist', Science: 'Sci' },
+      quarterColors: { Q1: '#00c0a5', Q2: '#0065a7', Q3: '#6644bb', Q4: '#c87800' },
+      powerUpMap: {},
+      spellingWordBank: {},
+      autoLogic: {
+        mathEvenOdd: true, mathTestTriple: true, readingTestPhrases: [],
+        fridayNoHomework: true, historyScienceNoAssign: true,
+        frontPageProtection: true, pagePublishDefault: false,
+        togetherLogicCourseId: TOGETHER_LOGIC_COURSE_ID,
+      },
+      canvasBaseUrl: 'https://thalesacademy.instructure.com',
+    };
+  }
 
   const autoLogic = data.auto_logic as unknown as AutoLogic;
   return {
