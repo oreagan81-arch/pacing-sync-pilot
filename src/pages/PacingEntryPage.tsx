@@ -301,6 +301,10 @@ export default function PacingEntryPage({
   const [reminders, setReminders] = useState('');
   const [resources, setResources] = useState('');
   const [subjectReminders, setSubjectReminders] = useState<Record<string, string>>({});
+  const [subjectResources, setSubjectResources] = useState<
+    Record<string, Array<{ label: string; url?: string; group?: string }>>
+  >({});
+  const [activeResourceSubject, setActiveResourceSubject] = useState<string>('Math');
   const SUBJECT_REMINDER_TABS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
   const [activeReminderSubject, setActiveReminderSubject] = useState<string>('Math');
   const [saving, setSaving] = useState(false);
