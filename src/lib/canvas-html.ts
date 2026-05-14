@@ -162,8 +162,10 @@ export function generateRedirectPageHtml(params: RedirectPageParams): string {
   </div>
   <div id="kl_custom_block_1" class="">
     <div id="kl_custom_block_0" class="">
-      <p>We are currently in <strong>${activeSubject}</strong> this unit.</p>
-      <p>Please visit the <a href="${courseUrl}" target="_blank" rel="noopener">${activeSubject} Canvas course</a> for this week's agenda.</p>
+      ${params.reminderOverride
+        ? `<p>${params.reminderOverride}</p>`
+        : `<p>We are currently in <strong>${activeSubject}</strong> this unit.</p>
+      <p>Please visit the <a href="${courseUrl}" target="_blank" rel="noopener">${activeSubject} Canvas course</a> for this week's agenda.</p>`}
     </div>
     <div id="kl_custom_block_5" class="">
       <p>&nbsp;</p>
