@@ -516,6 +516,12 @@ export default function PacingEntryPage({
       setActiveHsSubject(((weekData2 as any).active_hs_subject as string) || 'Both');
       const sr = (weekData2 as any).subject_reminders;
       setSubjectReminders(sr && typeof sr === 'object' && !Array.isArray(sr) ? (sr as Record<string, string>) : {});
+      const sres = (weekData2 as any).subject_resources;
+      setSubjectResources(
+        sres && typeof sres === 'object' && !Array.isArray(sres)
+          ? (sres as Record<string, Array<{ label: string; url?: string; group?: string }>>)
+          : {}
+      );
     }
 
     if (rows) {
