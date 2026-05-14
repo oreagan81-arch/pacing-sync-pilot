@@ -28,12 +28,12 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
 const SCHOOL_YEAR = '2025-2026';
 
 const SUBJECT_TYPES: Record<string, string[]> = {
-  Math: ['Lesson', 'Investigation', 'Test', 'Fact Test', 'Study Guide', 'No Class', '-'],
-  Reading: ['Lesson', 'Test', 'Checkout', 'No Class', '-'],
-  Spelling: ['Lesson', 'Test', 'No Class', '-'],
-  'Language Arts': ['Lesson', 'CP', 'Test', 'No Class', '-'],
-  History: ['Lesson', 'Test', 'No Class', '-'],
-  Science: ['Lesson', 'Test', 'No Class', '-'],
+  Math:            ['Lesson', 'Investigation', 'Test', 'Fact Test', 'Study Guide', 'CLT Testing', 'No Class', '-'],
+  Reading:         ['Lesson', 'Test', 'Checkout', 'CLT Testing', 'No Class', '-'],
+  Spelling:        ['Lesson', 'Test', 'CLT Testing', 'No Class', '-'],
+  'Language Arts': ['Lesson', 'CP', 'Test', 'CLT Testing', 'No Class', '-'],
+  History:         ['Lesson', 'Test', 'CLT Testing', 'No Class', '-'],
+  Science:         ['Lesson', 'Test', 'CLT Testing', 'No Class', '-'],
 };
 
 const LA_ASSIGNABLE_TYPES = new Set(['CP', 'Classroom Practice', 'Test']);
