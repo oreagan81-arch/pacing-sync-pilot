@@ -1117,260 +1117,113 @@ export default function PacingEntryPage({
       )}
 
       {/* ───────────────────────────────────────── */}
-      {/* SECTION C: Editable grid + week-level fields */}
+      {/* SECTION C: Subject-by-Subject Wizard       */}
       {/* ───────────────────────────────────────── */}
       <div className="space-y-4">
-        {/* Per-Subject Reminders (tabs) */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Per-Subject Reminders
-            </label>
-            <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
-              <Zap className="h-3 w-3" /> Auto-fill Tests
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {SUBJECT_REMINDER_TABS.map((s) => {
-              const has = (subjectReminders[s] || '').trim().length > 0;
-              const active = activeReminderSubject === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setActiveReminderSubject(s)}
-                  className={`px-2 py-1 rounded text-[11px] border transition ${
-                    active
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-muted/30 border-border hover:bg-muted/60'
-                  }`}
-                >
-                  {s}{has ? ' •' : ''}
-                </button>
-              );
-            })}
-          </div>
-          <Textarea
-            value={subjectReminders[activeReminderSubject] || ''}
-            onChange={(e) => {
-              setSubjectReminders((prev) => ({ ...prev, [activeReminderSubject]: e.target.value }));
-              setIsDirty(true);
-            }}
-            placeholder={`Reminders shown on the ${activeReminderSubject} Canvas page (one per line)`}
-            className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
-            style={{ borderLeftColor: '#c51062' }}
-            rows={3}
-          />
-        </div>
-
-        {/* Per-Subject Resources */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Per-Subject Resources
-            </label>
-            <span className="text-[10px] text-muted-foreground italic">
-              Group · Label · Canvas URL
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {SUBJECT_REMINDER_TABS.map((s) => {
-              const count = subjectResources[s]?.filter(r => r.label.trim()).length ?? 0;
-              const active = activeResourceSubject === s;
-              return (
-                <button key={s} type="button"
-                  onClick={() => setActiveResourceSubject(s)}
-                  className={`px-2 py-1 rounded text-[11px] border transition ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 border-border hover:bg-muted/60'}`}>
-                  {s}{count > 0 ? ` (${count})` : ''}
-                </button>
-              );
-            })}
-          </div>
-          <div className="space-y-1.5">
-            {(subjectResources[activeResourceSubject] ?? []).map((r, i) => (
-              <div key={i} className="flex gap-1 items-center">
-                <Input placeholder="Group" value={r.group ?? ''} className="w-24 text-xs h-7"
-                  onChange={(e) => {
-                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
-                    updated[i] = { ...updated[i], group: e.target.value || undefined };
-                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
-                    setIsDirty(true);
-                  }} />
-                <Input placeholder="File label *" value={r.label} className="flex-1 text-xs h-7"
-                  onChange={(e) => {
-                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
-                    updated[i] = { ...updated[i], label: e.target.value };
-                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
-                    setIsDirty(true);
-                  }} />
-                <Input placeholder="https://thalesacademy.instructure.com/..." value={r.url ?? ''} className="flex-1 text-xs h-7"
-                  onChange={(e) => {
-                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
-                    updated[i] = { ...updated[i], url: e.target.value || undefined };
-                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
-                    setIsDirty(true);
-                  }} />
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
-                  onClick={() => {
-                    const updated = (subjectResources[activeResourceSubject] ?? []).filter((_, j) => j !== i);
-                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
-                    setIsDirty(true);
-                  }}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-            <Button size="sm" variant="outline" className="text-xs h-7 mt-1"
-              onClick={() => {
-                const updated = [...(subjectResources[activeResourceSubject] ?? []), { label: '', url: undefined, group: undefined }];
-                setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
-                setIsDirty(true);
-              }}>
-              + Add Resource
-            </Button>
-          </div>
-        </div>
-
-        {/* Homeroom calendar reminders + Resources */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Homeroom — Mark Your Calendars
-            </label>
-            <Textarea
-              value={reminders}
-              onChange={(e) => { setReminders(e.target.value); setIsDirty(true); }}
-              placeholder="Calendar items shown only in the Homeroom newsletter..."
-              className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
-              style={{ borderLeftColor: '#c51062' }}
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Resources
-            </label>
-            <Textarea
-              value={resources}
-              onChange={(e) => { setResources(e.target.value); setIsDirty(true); }}
-              placeholder="Resource links or labels..."
-              className="border-l-4 bg-teal-50/50 dark:bg-teal-950/20"
-              style={{ borderLeftColor: '#0d9488' }}
-              rows={3}
-            />
-          </div>
-        </div>
-
-        {/* Day × Subject grid — desktop */}
-        <div className="hidden md:block rounded-lg border border-border bg-card/30 overflow-x-auto">
-          <div className="min-w-[1100px]">
-            <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 p-2 border-b border-border bg-muted/30 sticky top-0 z-10">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                <CalendarDays className="h-3.5 w-3.5" /> Subject
-              </div>
-              {DAYS.map((day) => (
-                <div key={day} className="text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {SUBJECTS.map((subject) => {
-              const courseId = config?.courseIds[subject];
-              const prefix = config?.assignmentPrefixes[subject] ?? '';
-              const isHsBlocked =
-                !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
-              if (
-                activeHsSubject !== 'Both' &&
-                ((subject === 'History' && activeHsSubject === 'Science') ||
-                  (subject === 'Science' && activeHsSubject === 'History'))
-              ) return null;
-              return (
-                <div key={subject} className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 p-2 border-b border-border/50 last:border-b-0">
-                  <div className="flex flex-col justify-center gap-1 px-2">
-                    <span className="text-sm font-bold leading-tight">{subject}</span>
-                    {courseId && (
-                      <span className="text-[9px] font-mono text-muted-foreground">Course {courseId}</span>
-                    )}
-                    {isTestWeek(subject) && (
-                      <span className="inline-flex items-center w-fit rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600">
-                        Test Week
-                      </span>
-                    )}
-                    {subject === 'Math' && (() => {
-                      const pu = getPowerUp(weekData.Math.Monday.lesson_num);
-                      return pu ? (
-                        <span className="inline-flex items-center w-fit rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-foreground">
-                          Power Up {pu}
-                        </span>
-                      ) : null;
-                    })()}
-                  </div>
-                  {DAYS.map((day) => {
-                    const cell = weekData[subject][day];
-                    const isLaBlocked = subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
-                    return (
-                      <DaySubjectCard
-                        key={day}
-                        subject={subject}
-                        day={day}
-                        cell={cell}
-                        prefix={prefix}
-                        isFriday={day === 'Friday'}
-                        isHsBlocked={isHsBlocked}
-                        isLaBlocked={isLaBlocked}
-                        availableTypes={SUBJECT_TYPES[subject] ?? ['Lesson', 'Test', '-']}
-                        contentMap={contentMap}
-                        subjectAccent="hsl(var(--primary))"
-                        onChange={(field, value) =>
-                          updateCell(subject, day, field as keyof typeof cell, value)
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Mobile grid */}
-        <div className="md:hidden space-y-3">
-          {SUBJECTS.map((subject) => {
-            const courseId = config?.courseIds[subject];
-            const prefix = config?.assignmentPrefixes[subject] ?? '';
-            const isHsBlocked =
-              !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
-            if (
-              activeHsSubject !== 'Both' &&
-              ((subject === 'History' && activeHsSubject === 'Science') ||
-                (subject === 'Science' && activeHsSubject === 'History'))
-            ) return null;
+        {/* Subject tab bar */}
+        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card/50 p-2">
+          {SUBJECTS.map((s) => {
+            const hasData = DAYS.some((d) => (weekData[s][d].type || '').trim().length > 0);
+            const active = wizardSubject === s;
             return (
-              <div key={subject} className="rounded-lg border border-border bg-card/30 overflow-hidden">
-                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/30">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-bold leading-tight truncate">{subject}</span>
-                    {courseId && <span className="text-[9px] font-mono text-muted-foreground">#{courseId}</span>}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {isTestWeek(subject) && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600">
-                        Test
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setWizardSubject(s);
+                  setActiveReminderSubject(s);
+                  setActiveResourceSubject(s);
+                }}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5',
+                  active
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/40 text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {hasData && <span className={cn('text-[10px]', active ? 'text-emerald-200' : 'text-emerald-500')}>✓</span>}
+                {s}
+              </button>
+            );
+          })}
+        </div>
+
+        {(() => {
+          const subject = wizardSubject;
+          const courseId = config?.courseIds[subject];
+          const prefix = config?.assignmentPrefixes[subject] ?? '';
+          const isHsBlocked =
+            !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
+          const subjectIdx = SUBJECTS.indexOf(subject);
+          const isFirst = subjectIdx === 0;
+          const isLast = subjectIdx === SUBJECTS.length - 1;
+
+          return (
+            <>
+              {/* Subject header */}
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold">{subject}</h2>
+                  {courseId && (
+                    <span className="text-[10px] font-mono text-muted-foreground">Course {courseId}</span>
+                  )}
+                  {isTestWeek(subject) && (
+                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                      Test Week
+                    </span>
+                  )}
+                  {subject === 'Math' && (() => {
+                    const pu = getPowerUp(weekData.Math.Monday.lesson_num);
+                    return pu ? (
+                      <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-foreground">
+                        Power Up {pu}
                       </span>
-                    )}
-                    {subject === 'Math' && (() => {
-                      const pu = getPowerUp(weekData.Math.Monday.lesson_num);
-                      return pu ? (
-                        <span className="rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-foreground">
-                          PU {pu}
-                        </span>
-                      ) : null;
-                    })()}
+                    ) : null;
+                  })()}
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  Step {subjectIdx + 1} of {SUBJECTS.length}
+                </span>
+              </div>
+
+              {/* H/S subject toggle (only when relevant) */}
+              {(subject === 'History' || subject === 'Science') && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/50 px-3 py-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Active H/S Subject
+                  </label>
+                  <div className="flex gap-1">
+                    {(['Both', 'History', 'Science'] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => { setActiveHsSubject(opt); setIsDirty(true); }}
+                        className={cn(
+                          'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all',
+                          activeHsSubject === opt
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                        )}
+                      >
+                        {opt}
+                      </button>
+                    ))}
                   </div>
+                  {activeHsSubject !== 'Both' && (
+                    <span className="text-[11px] text-muted-foreground">
+                      The {activeHsSubject === 'History' ? 'Science' : 'History'} page will redirect to {activeHsSubject}.
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 1 — Schedule */}
+              <div className="rounded-lg border border-border bg-card/30 p-3 space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Step 1 — Schedule
                 </div>
                 <div className="overflow-x-auto snap-x snap-mandatory">
-                  <div className="flex gap-2 p-2" style={{ minWidth: 'max-content' }}>
+                  <div className="flex gap-2" style={{ minWidth: 'max-content' }}>
                     {DAYS.map((day) => {
                       const cell = weekData[subject][day];
                       const isLaBlocked = subject === 'Language Arts' && !isLanguageArtsAssignable(cell.type);
@@ -1397,37 +1250,132 @@ export default function PacingEntryPage({
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
 
-        {/* H/S subject toggle */}
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/50 px-4 py-3">
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Active H/S Subject
+              {/* STEP 2 — Resources */}
+              <div className="rounded-lg border border-border bg-card/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Step 2 — Resources
+                  </div>
+                  <span className="text-[10px] text-muted-foreground italic">
+                    Group · Label · Canvas URL
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {(subjectResources[subject] ?? []).map((r, i) => (
+                    <div key={i} className="flex gap-1 items-center">
+                      <Input placeholder="Group" value={r.group ?? ''} className="w-24 text-xs h-7"
+                        onChange={(e) => {
+                          const updated = [...(subjectResources[subject] ?? [])];
+                          updated[i] = { ...updated[i], group: e.target.value || undefined };
+                          setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                          setIsDirty(true);
+                        }} />
+                      <Input placeholder="File label *" value={r.label} className="flex-1 text-xs h-7"
+                        onChange={(e) => {
+                          const updated = [...(subjectResources[subject] ?? [])];
+                          updated[i] = { ...updated[i], label: e.target.value };
+                          setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                          setIsDirty(true);
+                        }} />
+                      <Input placeholder="https://thalesacademy.instructure.com/..." value={r.url ?? ''} className="flex-1 text-xs h-7"
+                        onChange={(e) => {
+                          const updated = [...(subjectResources[subject] ?? [])];
+                          updated[i] = { ...updated[i], url: e.target.value || undefined };
+                          setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                          setIsDirty(true);
+                        }} />
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
+                        onClick={() => {
+                          const updated = (subjectResources[subject] ?? []).filter((_, j) => j !== i);
+                          setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                          setIsDirty(true);
+                        }}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" className="text-xs h-7 mt-1"
+                    onClick={() => {
+                      const updated = [...(subjectResources[subject] ?? []), { label: '', url: undefined, group: undefined }];
+                      setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                      setIsDirty(true);
+                    }}>
+                    + Add Resource
+                  </Button>
+                </div>
+              </div>
+
+              {/* STEP 3 — Reminder */}
+              <div className="rounded-lg border border-border bg-card/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Step 3 — Reminder shown on {subject} Canvas page
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleAutoRemind} className="h-6 gap-1 text-[10px]">
+                    <Zap className="h-3 w-3" /> Auto-fill from tests
+                  </Button>
+                </div>
+                <Textarea
+                  value={subjectReminders[subject] || ''}
+                  onChange={(e) => {
+                    setSubjectReminders((prev) => ({ ...prev, [subject]: e.target.value }));
+                    setIsDirty(true);
+                  }}
+                  placeholder={`Reminder text for ${subject} (one item per line)`}
+                  className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
+                  style={{ borderLeftColor: '#c51062' }}
+                  rows={3}
+                />
+              </div>
+
+              {/* Wizard navigation */}
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  disabled={isFirst}
+                  onClick={() => {
+                    const next = SUBJECTS[subjectIdx - 1];
+                    setWizardSubject(next);
+                    setActiveReminderSubject(next);
+                    setActiveResourceSubject(next);
+                  }}
+                >
+                  ← Previous Subject
+                </Button>
+                <Button
+                  onClick={async () => {
+                    await handleSave();
+                    if (!isLast) {
+                      const next = SUBJECTS[subjectIdx + 1];
+                      setWizardSubject(next);
+                      setActiveReminderSubject(next);
+                      setActiveResourceSubject(next);
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isLast ? 'Save Week ✓' : 'Save & Continue →'}
+                </Button>
+              </div>
+            </>
+          );
+        })()}
+
+        {/* Homeroom — Mark Your Calendars (newsletter only) */}
+        <div className="rounded-lg border border-border bg-card/30 p-3 space-y-2">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Homeroom Newsletter Calendar
           </label>
-          <div className="flex gap-1">
-            {(['Both', 'History', 'Science'] as const).map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => { setActiveHsSubject(opt); setIsDirty(true); }}
-                className={cn(
-                  'px-3 py-1 rounded-md text-xs font-semibold transition-all',
-                  activeHsSubject === opt
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
-                )}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-          {activeHsSubject !== 'Both' && (
-            <span className="text-xs text-muted-foreground">
-              The {activeHsSubject === 'History' ? 'Science' : 'History'} Canvas page will show a redirect to {activeHsSubject}.
-            </span>
-          )}
+          <Textarea
+            value={reminders}
+            onChange={(e) => { setReminders(e.target.value); setIsDirty(true); }}
+            placeholder="Calendar items shown only in the Homeroom newsletter (one per line)..."
+            className="border-l-4 bg-[#fff8fb] dark:bg-pink-950/20"
+            style={{ borderLeftColor: '#c51062' }}
+            rows={3}
+          />
         </div>
       </div>
     </div>
