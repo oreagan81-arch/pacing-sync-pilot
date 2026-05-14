@@ -1162,6 +1162,74 @@ export default function PacingEntryPage({
           />
         </div>
 
+        {/* Per-Subject Resources */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Per-Subject Resources
+            </label>
+            <span className="text-[10px] text-muted-foreground italic">
+              Group · Label · Canvas URL
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SUBJECT_REMINDER_TABS.map((s) => {
+              const count = subjectResources[s]?.filter(r => r.label.trim()).length ?? 0;
+              const active = activeResourceSubject === s;
+              return (
+                <button key={s} type="button"
+                  onClick={() => setActiveResourceSubject(s)}
+                  className={`px-2 py-1 rounded text-[11px] border transition ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 border-border hover:bg-muted/60'}`}>
+                  {s}{count > 0 ? ` (${count})` : ''}
+                </button>
+              );
+            })}
+          </div>
+          <div className="space-y-1.5">
+            {(subjectResources[activeResourceSubject] ?? []).map((r, i) => (
+              <div key={i} className="flex gap-1 items-center">
+                <Input placeholder="Group" value={r.group ?? ''} className="w-24 text-xs h-7"
+                  onChange={(e) => {
+                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
+                    updated[i] = { ...updated[i], group: e.target.value || undefined };
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }} />
+                <Input placeholder="File label *" value={r.label} className="flex-1 text-xs h-7"
+                  onChange={(e) => {
+                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
+                    updated[i] = { ...updated[i], label: e.target.value };
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }} />
+                <Input placeholder="https://thalesacademy.instructure.com/..." value={r.url ?? ''} className="flex-1 text-xs h-7"
+                  onChange={(e) => {
+                    const updated = [...(subjectResources[activeResourceSubject] ?? [])];
+                    updated[i] = { ...updated[i], url: e.target.value || undefined };
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }} />
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
+                  onClick={() => {
+                    const updated = (subjectResources[activeResourceSubject] ?? []).filter((_, j) => j !== i);
+                    setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                    setIsDirty(true);
+                  }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+            <Button size="sm" variant="outline" className="text-xs h-7 mt-1"
+              onClick={() => {
+                const updated = [...(subjectResources[activeResourceSubject] ?? []), { label: '', url: undefined, group: undefined }];
+                setSubjectResources(prev => ({ ...prev, [activeResourceSubject]: updated }));
+                setIsDirty(true);
+              }}>
+              + Add Resource
+            </Button>
+          </div>
+        </div>
+
         {/* Homeroom calendar reminders + Resources */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
