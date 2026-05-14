@@ -36,6 +36,7 @@ export interface RedirectPageParams {
   quarter: string;
   dateRange: string;
   quarterColor: string;
+  reminderOverride?: string;
 }
 
 export interface CanvasPageRow {
