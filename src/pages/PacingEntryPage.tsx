@@ -452,7 +452,7 @@ export default function PacingEntryPage({
                 .join('\n');
               return matched || d.resources || null;
             })(),
-            create_assign: isNoAssign || isFriday || laBlocked ? false : d.create_assign,
+            create_assign: isNoAssign || isFriday || laBlocked || d.type === 'CLT Testing' ? false : d.create_assign,
             hint_override: d.hint_override ?? null,
           };
         }),
