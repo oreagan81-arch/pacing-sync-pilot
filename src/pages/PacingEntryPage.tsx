@@ -531,8 +531,7 @@ export default function PacingEntryPage({
       }
       setWeekData(newData);
 
-      if (weekData2?.reminders) setReminders(weekData2.reminders);
-      else setReminders(buildAutoReminders(newData));
+      setReminders(weekData2?.reminders || '');
 
       const refs = buildAllResourceRefs(rows);
       const matched = contentMap.filter((r) => refs.has(r.lesson_ref)).map((r) => r.canonical_name).join('\n');
