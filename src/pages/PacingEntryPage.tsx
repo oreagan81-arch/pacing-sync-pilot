@@ -307,6 +307,7 @@ export default function PacingEntryPage({
   const [activeResourceSubject, setActiveResourceSubject] = useState<string>('Math');
   const SUBJECT_REMINDER_TABS = ['Math', 'Reading', 'Language Arts', 'History', 'Science'] as const;
   const [activeReminderSubject, setActiveReminderSubject] = useState<string>('Math');
+  const [wizardSubject, setWizardSubject] = useState<typeof SUBJECTS[number]>('Math');
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [activeHsSubject, setActiveHsSubject] = useState<string>('Both');
