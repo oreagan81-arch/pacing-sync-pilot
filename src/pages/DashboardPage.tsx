@@ -73,6 +73,38 @@ export default function DashboardPage({
   const [stats, setStats] = useState({ announcements: 0, pages: 0, files: 0 });
   const [loading, setLoading] = useState(true);
   const [pacingRows, setPacingRows] = useState<PacingRow[]>([]);
+  const [briefing, setBriefing] = useState<{
+    hasPacing: boolean; draftAnnouncements: number;
+    deployedPages: string[]; pendingSubjects: string[];
+  }>({ hasPacing: false, draftAnnouncements: 0, deployedPages: [], pendingSubjects: [] });
+
+  useEffect(() => {
+    (async () => {
+      const { data: week } = await supabase.from('weeks').select('id')
+        .eq('quarter', activeQuarter).eq('week_num', activeWeek).maybeSingle();
+      if (!week) {
+        setBriefing({ hasPacing: false, draftAnnouncements: 0, deployedPages: [], pendingSubjects: [] });
+        return;
+      }
+      const [{ data: rows }, { data: logs }, { data: anns }] = await Promise.all([
+        supabase.from('pacing_rows').select('subject').eq('week_id', week.id).limit(1),
+        supabase.from('deploy_log').select('subject, status').eq('week_id', week.id).eq('action', 'page_deploy').eq('status', 'DEPLOYED'),
+        supabase.from('announcements').select('id').eq('week_id', week.id).eq('status', 'DRAFT'),
+      ]);
+      const deployedPages = [...new Set((logs || []).map((l: any) => l.subject).filter(Boolean))] as string[];
+      const allSubjects = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'];
+      const pendingSubjects = allSubjects.filter(s => !deployedPages.includes(s));
+      setBriefing({
+        hasPacing: (rows?.length || 0) > 0,
+        draftAnnouncements: (anns?.length || 0),
+        deployedPages,
+        pendingSubjects,
+      });
+    })();
+  }, [activeQuarter, activeWeek]);
+
+  const briefingDateRange = getPacingWeekDateRange(activeQuarter, activeWeek);
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   useEffect(() => {
     loadDashboard();
