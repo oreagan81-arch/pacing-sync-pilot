@@ -1274,6 +1274,32 @@ export default function PacingEntryPage({
                     Group · Label · Canvas URL
                   </span>
                 </div>
+                {newSuggestions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Auto-matched from Content Registry
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {newSuggestions.slice(0, 8).map((s) => (
+                        <button
+                          key={s.lesson_ref}
+                          type="button"
+                          className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] text-primary hover:bg-primary/10 transition-colors"
+                          onClick={() => {
+                            const updated = [
+                              ...(subjectResources[subject] ?? []),
+                              { label: s.canonical_name, url: s.canvas_url || undefined, group: undefined }
+                            ];
+                            setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                            setIsDirty(true);
+                          }}
+                        >
+                          + {s.canonical_name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   {(subjectResources[subject] ?? []).map((r, i) => (
                     <div key={i} className="flex gap-1 items-center">
