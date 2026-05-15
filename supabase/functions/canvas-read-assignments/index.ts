@@ -16,6 +16,8 @@ Deno.serve(async (req) => {
     );
     const body = await req.json().catch(() => ({}));
     const map = await getCourseIds();
+    const startDate = body.startDate ? new Date(body.startDate) : null;
+    const endDate = body.endDate ? new Date(body.endDate) : null;
     const courseIds: number[] = body.courseId
       ? [Number(body.courseId)]
       : Array.from(new Set(Object.values(map)));
@@ -26,6 +28,11 @@ Deno.serve(async (req) => {
       try {
         const items = await listAssignments(courseId);
         for (const a of items) {
+          if (a.due_at) {
+            const due = new Date(a.due_at);
+            if (startDate && due < startDate) continue;
+            if (endDate && due > endDate) continue;
+          }
           await sb.from('canvas_snapshots').upsert(
             {
               course_id: courseId,
