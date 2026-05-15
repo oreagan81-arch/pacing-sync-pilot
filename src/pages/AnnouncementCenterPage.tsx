@@ -755,12 +755,12 @@ export default function AnnouncementCenterPage() {
                   </div>
                   <div className="flex gap-2">
                     {ann.status === 'DRAFT' && (
-                      <Button size="sm" variant="outline" onClick={() => handlePost(ann)} disabled={posting[ann.id]} className="gap-1 text-xs">
+                      <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handlePost(ann); }} disabled={posting[ann.id]} className="gap-1 text-xs">
                         {posting[ann.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                         Post
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => handleDelete(ann.id)} className="text-destructive hover:text-destructive">
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(ann.id); }} className="text-destructive hover:text-destructive">
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
