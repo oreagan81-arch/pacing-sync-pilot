@@ -721,7 +721,11 @@ export default function AnnouncementCenterPage() {
         ) : announcements.map((ann) => {
           const borderClass = SUBJECT_BORDER[ann.subject || ''] || 'border-l-muted';
           return (
-            <Card key={ann.id} className={`transition-all border-l-4 ${borderClass} ${ann.status === 'POSTED' ? 'opacity-70' : ''}`}>
+            <Card
+              key={ann.id}
+              className={`transition-all border-l-4 ${borderClass} ${ann.status === 'POSTED' ? 'opacity-70' : ''} cursor-pointer hover:shadow-md`}
+              onClick={() => openEdit(ann)}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
