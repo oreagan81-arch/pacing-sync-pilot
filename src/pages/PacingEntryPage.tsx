@@ -1154,6 +1154,19 @@ export default function PacingEntryPage({
           const prefix = config?.assignmentPrefixes[subject] ?? '';
           const isHsBlocked =
             !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
+
+          // Auto-suggest resources from content_map for this subject's lesson numbers
+          const subjectLessonNums = DAYS
+            .map((d) => weekData[subject][d].lesson_num)
+            .filter(Boolean);
+          const suggestedResources = contentMap.filter((cm) => {
+            if (cm.subject !== subject && !(subject === 'Reading' && cm.subject === 'Spelling')) return false;
+            if (!cm.canvas_url) return false;
+            const num = cm.lesson_ref?.replace(/[^0-9]/g, '') || '';
+            return subjectLessonNums.some((ln) => ln === num || ln === cm.lesson_ref);
+          });
+          const alreadyAdded = new Set((subjectResources[subject] ?? []).map(r => r.label));
+          const newSuggestions = suggestedResources.filter(s => !alreadyAdded.has(s.canonical_name));
           const subjectIdx = SUBJECTS.indexOf(subject);
           const isFirst = subjectIdx === 0;
           const isLast = subjectIdx === SUBJECTS.length - 1;
