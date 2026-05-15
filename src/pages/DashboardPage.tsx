@@ -5,12 +5,15 @@ import { Button } from '@/components/ui/button';
 import {
   Activity, Globe, ClipboardList, Megaphone, AlertTriangle,
   CheckCircle2, Clock, TrendingUp, BookOpen, FileText, Calendar,
+  Rocket, AlertCircle,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { evaluateWeekRisk, type RiskRow } from '@/lib/risk-engine';
 import { QuickStats } from '@/components/dashboard/QuickStats';
 import { UpcomingPosts } from '@/components/dashboard/UpcomingPosts';
+import { useSystemStore } from '@/store/useSystemStore';
+import { getPacingWeekDateRange } from '@/lib/pacing-week';
 
 interface WeekSummary {
   weekId: string;
