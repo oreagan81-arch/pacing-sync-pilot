@@ -517,6 +517,8 @@ export default function AnnouncementCenterPage() {
     }
     setAiRewriting(false);
   };
+
+  const handlePost = async (ann: Announcement) => {
     if (!ann.course_id || !ann.title) { toast.error('Missing course ID or title'); return; }
     setPosting((p) => ({ ...p, [ann.id]: true }));
     try {
