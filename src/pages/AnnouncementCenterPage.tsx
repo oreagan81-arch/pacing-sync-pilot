@@ -105,6 +105,14 @@ export default function AnnouncementCenterPage() {
   const [posting, setPosting] = useState<Record<string, boolean>>({});
   const [postingAll, setPostingAll] = useState(false);
 
+  // Edit drawer state
+  const [editingAnn, setEditingAnn] = useState<Announcement | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editScheduled, setEditScheduled] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [aiRewriting, setAiRewriting] = useState(false);
+
   // Manual create form
   const [showForm, setShowForm] = useState(false);
   const [formSubject, setFormSubject] = useState('');
