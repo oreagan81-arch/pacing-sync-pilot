@@ -311,17 +311,18 @@ export default function AssignmentsPage() {
           results[r.rowKey] = 'DEPLOYED'; ok++;
           continue;
         }
+        const ov = editOverrides[r.rowKey] || {};
         const res = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>(
           'canvas-deploy-assignment',
           {
             subject: r.subject,
             courseId: r.courseId,
-            title: r.title,
+            title: ov.title ?? r.title,
             description: r.description,
-            points: r.points,
-            gradingType: r.gradingType,
+            points: ov.points ?? r.points,
+            gradingType: ov.gradingType ?? r.gradingType,
             assignmentGroup: r.assignmentGroup,
-            dueDate: r.dueDate || undefined,
+            dueDate: ov.dueDate ?? r.dueDate ?? undefined,
             omitFromFinal: r.omitFromFinal,
             existingId: r.canvasUrl ? r.canvasUrl.split('/').pop() : undefined,
             rowId: r.rowId || undefined,
