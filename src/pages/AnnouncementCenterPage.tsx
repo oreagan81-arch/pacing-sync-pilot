@@ -770,6 +770,84 @@ export default function AnnouncementCenterPage() {
           );
         })}
       </div>
+
+      {/* Full edit drawer */}
+      <Dialog open={!!editingAnn} onOpenChange={(o) => { if (!o) setEditingAnn(null); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4" />
+              Edit Announcement
+              {editingAnn?.status && (
+                <Badge className={`text-xs ml-2 ${statusColor(editingAnn.status)}`}>
+                  {editingAnn.status}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 p-6 overflow-auto flex-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Title</label>
+                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scheduled Post (ET)</label>
+                <Input
+                  type="datetime-local"
+                  value={editScheduled ? editScheduled.slice(0, 16) : ''}
+                  onChange={(e) => setEditScheduled(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subject</label>
+                <div className="flex items-center h-10 px-3 rounded border border-border text-sm text-muted-foreground">
+                  {editingAnn?.subject || '—'}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Content (HTML)</label>
+                <Button
+                  size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
+                  onClick={handleAiRewrite} disabled={aiRewriting}
+                >
+                  {aiRewriting ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>✦</span>}
+                  AI Rewrite
+                </Button>
+              </div>
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={8}
+                className="text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</label>
+              <div
+                className="rounded border border-border bg-white p-4 text-sm max-h-64 overflow-auto"
+                dangerouslySetInnerHTML={{ __html: editContent }}
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t">
+            <Button variant="outline" onClick={() => setEditingAnn(null)}>Cancel</Button>
+            <div className="flex gap-2">
+              {editingAnn?.status === 'DRAFT' && (
+                <Button variant="secondary" onClick={async () => { await handleEditSave(); if (editingAnn) handlePost({ ...editingAnn, title: editTitle, content: editContent, scheduled_post: editScheduled }); }}>
+                  Save & Post Now
+                </Button>
+              )}
+              <Button onClick={handleEditSave} disabled={editSaving}>
+                {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
