@@ -1154,6 +1154,19 @@ export default function PacingEntryPage({
           const prefix = config?.assignmentPrefixes[subject] ?? '';
           const isHsBlocked =
             !!config?.autoLogic.historyScienceNoAssign && (subject === 'History' || subject === 'Science');
+
+          // Auto-suggest resources from content_map for this subject's lesson numbers
+          const subjectLessonNums = DAYS
+            .map((d) => weekData[subject][d].lesson_num)
+            .filter(Boolean);
+          const suggestedResources = contentMap.filter((cm) => {
+            if (cm.subject !== subject && !(subject === 'Reading' && cm.subject === 'Spelling')) return false;
+            if (!cm.canvas_url) return false;
+            const num = cm.lesson_ref?.replace(/[^0-9]/g, '') || '';
+            return subjectLessonNums.some((ln) => ln === num || ln === cm.lesson_ref);
+          });
+          const alreadyAdded = new Set((subjectResources[subject] ?? []).map(r => r.label));
+          const newSuggestions = suggestedResources.filter(s => !alreadyAdded.has(s.canonical_name));
           const subjectIdx = SUBJECTS.indexOf(subject);
           const isFirst = subjectIdx === 0;
           const isLast = subjectIdx === SUBJECTS.length - 1;
@@ -1261,6 +1274,32 @@ export default function PacingEntryPage({
                     Group · Label · Canvas URL
                   </span>
                 </div>
+                {newSuggestions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      Auto-matched from Content Registry
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {newSuggestions.slice(0, 8).map((s) => (
+                        <button
+                          key={s.lesson_ref}
+                          type="button"
+                          className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] text-primary hover:bg-primary/10 transition-colors"
+                          onClick={() => {
+                            const updated = [
+                              ...(subjectResources[subject] ?? []),
+                              { label: s.canonical_name, url: s.canvas_url || undefined, group: undefined }
+                            ];
+                            setSubjectResources(prev => ({ ...prev, [subject]: updated }));
+                            setIsDirty(true);
+                          }}
+                        >
+                          + {s.canonical_name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   {(subjectResources[subject] ?? []).map((r, i) => (
                     <div key={i} className="flex gap-1 items-center">

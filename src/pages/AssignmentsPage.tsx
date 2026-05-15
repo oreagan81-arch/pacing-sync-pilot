@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -87,6 +88,9 @@ export default function AssignmentsPage() {
   const [filter, setFilter] = useState<string>('All');
   const [deployResults, setDeployResults] = useState<Record<string, DeployStatus>>({});
   const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
+  const [editOverrides, setEditOverrides] = useState<
+    Record<string, Partial<{ title: string; dueDate: string; points: number; gradingType: string }>>
+  >({});
   const [testMode, setTestMode] = useState(false);
   const [testRunning, setTestRunning] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
@@ -307,17 +311,18 @@ export default function AssignmentsPage() {
           results[r.rowKey] = 'DEPLOYED'; ok++;
           continue;
         }
+        const ov = editOverrides[r.rowKey] || {};
         const res = await callEdge<{ status?: string; canvasUrl?: string; error?: string }>(
           'canvas-deploy-assignment',
           {
             subject: r.subject,
             courseId: r.courseId,
-            title: r.title,
+            title: ov.title ?? r.title,
             description: r.description,
-            points: r.points,
-            gradingType: r.gradingType,
+            points: ov.points ?? r.points,
+            gradingType: ov.gradingType ?? r.gradingType,
             assignmentGroup: r.assignmentGroup,
-            dueDate: r.dueDate || undefined,
+            dueDate: ov.dueDate ?? r.dueDate ?? undefined,
             omitFromFinal: r.omitFromFinal,
             existingId: r.canvasUrl ? r.canvasUrl.split('/').pop() : undefined,
             rowId: r.rowId || undefined,
@@ -770,23 +775,75 @@ export default function AssignmentsPage() {
                               {formatDueET(row.dueDate)}
                             </TableCell>
                           </TableRow>
-                          {isExpanded && (
-                            <TableRow key={`${row.rowKey}_exp`} className="bg-muted/20">
-                              <TableCell colSpan={8} className="p-4">
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-                                  Description Preview
-                                </div>
-                                <div
-                                  className="text-sm prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
-                                  dangerouslySetInnerHTML={{ __html: row.description }}
-                                />
-                                <div className="mt-3 text-[10px] font-mono text-muted-foreground">
-                                  hash: {row.contentHash.slice(0, 12)}…
-                                  {row.storedHash && ` · stored: ${row.storedHash.slice(0, 12)}…`}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
+                          {isExpanded && (() => {
+                            const overrides = editOverrides[row.rowKey] || {};
+                            const setField = (field: string, value: any) => {
+                              setEditOverrides(prev => ({
+                                ...prev,
+                                [row.rowKey]: { ...prev[row.rowKey], [field]: value }
+                              }));
+                            };
+                            return (
+                              <TableRow key={`${row.rowKey}_exp`} className="bg-muted/20">
+                                <TableCell colSpan={8} className="p-4 space-y-3">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Title</label>
+                                      <Input
+                                        className="text-xs h-8"
+                                        value={overrides.title ?? row.title}
+                                        onChange={(e) => setField('title', e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Due Date (ET midnight)</label>
+                                      <Input
+                                        type="date"
+                                        className="text-xs h-8"
+                                        value={overrides.dueDate?.slice(0, 10) ?? (row.dueDate?.slice(0, 10) || '')}
+                                        onChange={(e) => setField('dueDate', e.target.value ? `${e.target.value}T23:59:00` : '')}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Points</label>
+                                      <Input
+                                        type="number"
+                                        className="text-xs h-8 w-20"
+                                        value={overrides.points ?? row.points}
+                                        onChange={(e) => setField('points', Number(e.target.value))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Grading Type</label>
+                                      <select
+                                        className="h-8 rounded border border-input bg-background px-2 text-xs w-full"
+                                        value={overrides.gradingType ?? row.gradingType}
+                                        onChange={(e) => setField('gradingType', e.target.value)}
+                                      >
+                                        <option value="points">Points</option>
+                                        <option value="pass_fail">Pass/Fail</option>
+                                        <option value="not_graded">Not Graded</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Description Preview</div>
+                                    <div
+                                      className="text-sm prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline rounded border border-border/50 bg-background p-3 max-h-40 overflow-auto"
+                                      dangerouslySetInnerHTML={{ __html: row.description }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] font-mono text-muted-foreground">
+                                    hash: {row.contentHash.slice(0, 12)}…
+                                    {row.storedHash && ` · stored: ${row.storedHash.slice(0, 12)}…`}
+                                    {Object.keys(overrides).length > 0 && (
+                                      <span className="ml-2 text-amber-500 font-semibold">● Overrides pending</span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })()}
                         </>
                       );
                     })}

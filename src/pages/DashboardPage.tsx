@@ -5,12 +5,15 @@ import { Button } from '@/components/ui/button';
 import {
   Activity, Globe, ClipboardList, Megaphone, AlertTriangle,
   CheckCircle2, Clock, TrendingUp, BookOpen, FileText, Calendar,
+  Rocket, AlertCircle,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { evaluateWeekRisk, type RiskRow } from '@/lib/risk-engine';
 import { QuickStats } from '@/components/dashboard/QuickStats';
 import { UpcomingPosts } from '@/components/dashboard/UpcomingPosts';
+import { useSystemStore } from '@/store/useSystemStore';
+import { getPacingWeekDateRange } from '@/lib/pacing-week';
 
 interface WeekSummary {
   weekId: string;
@@ -70,6 +73,38 @@ export default function DashboardPage({
   const [stats, setStats] = useState({ announcements: 0, pages: 0, files: 0 });
   const [loading, setLoading] = useState(true);
   const [pacingRows, setPacingRows] = useState<PacingRow[]>([]);
+  const [briefing, setBriefing] = useState<{
+    hasPacing: boolean; draftAnnouncements: number;
+    deployedPages: string[]; pendingSubjects: string[];
+  }>({ hasPacing: false, draftAnnouncements: 0, deployedPages: [], pendingSubjects: [] });
+
+  useEffect(() => {
+    (async () => {
+      const { data: week } = await supabase.from('weeks').select('id')
+        .eq('quarter', activeQuarter).eq('week_num', activeWeek).maybeSingle();
+      if (!week) {
+        setBriefing({ hasPacing: false, draftAnnouncements: 0, deployedPages: [], pendingSubjects: [] });
+        return;
+      }
+      const [{ data: rows }, { data: logs }, { data: anns }] = await Promise.all([
+        supabase.from('pacing_rows').select('subject').eq('week_id', week.id).limit(1),
+        supabase.from('deploy_log').select('subject, status').eq('week_id', week.id).eq('action', 'page_deploy').eq('status', 'DEPLOYED'),
+        supabase.from('announcements').select('id').eq('week_id', week.id).eq('status', 'DRAFT'),
+      ]);
+      const deployedPages = [...new Set((logs || []).map((l: any) => l.subject).filter(Boolean))] as string[];
+      const allSubjects = ['Math', 'Reading', 'Language Arts', 'History', 'Science', 'Homeroom'];
+      const pendingSubjects = allSubjects.filter(s => !deployedPages.includes(s));
+      setBriefing({
+        hasPacing: (rows?.length || 0) > 0,
+        draftAnnouncements: (anns?.length || 0),
+        deployedPages,
+        pendingSubjects,
+      });
+    })();
+  }, [activeQuarter, activeWeek]);
+
+  const briefingDateRange = getPacingWeekDateRange(activeQuarter, activeWeek);
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   useEffect(() => {
     loadDashboard();
@@ -178,6 +213,59 @@ export default function DashboardPage({
           {activeQuarter} · Week {activeWeek}
           {weekSummary?.dateRange && ` · ${weekSummary.dateRange}`}
         </p>
+      </div>
+
+      {/* Today's Briefing */}
+      <div className="rounded-xl border border-border bg-gradient-to-br from-primary/5 to-primary/0 p-5 space-y-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{todayLabel}</p>
+          <h2 className="text-2xl font-bold mt-0.5">{activeQuarter} · Week {activeWeek}</h2>
+          <p className="text-sm text-muted-foreground">{briefingDateRange}</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button onClick={() => navigate('/pacing')} className="flex flex-col items-start gap-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors p-3 text-left">
+            <BookOpen className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold">Pacing Entry</span>
+            <span className="text-[11px] text-muted-foreground">{briefing.hasPacing ? 'Data saved' : 'Not started'}</span>
+          </button>
+          <button onClick={() => navigate('/pages')} className="flex flex-col items-start gap-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors p-3 text-left">
+            <FileText className="h-5 w-5 text-blue-500" />
+            <span className="text-sm font-semibold">Canvas Pages</span>
+            <span className="text-[11px] text-muted-foreground">{briefing.deployedPages.length}/6 deployed</span>
+          </button>
+          <button onClick={() => navigate('/assignments')} className="flex flex-col items-start gap-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors p-3 text-left">
+            <Rocket className="h-5 w-5 text-emerald-500" />
+            <span className="text-sm font-semibold">Assignments</span>
+            <span className="text-[11px] text-muted-foreground">Review &amp; deploy</span>
+          </button>
+          <button onClick={() => navigate('/announcements')} className="flex flex-col items-start gap-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors p-3 text-left">
+            <Megaphone className="h-5 w-5 text-orange-500" />
+            <span className="text-sm font-semibold">Announcements</span>
+            <span className="text-[11px] text-muted-foreground">
+              {briefing.draftAnnouncements > 0
+                ? `${briefing.draftAnnouncements} draft${briefing.draftAnnouncements !== 1 ? 's' : ''} ready`
+                : 'No drafts'}
+            </span>
+          </button>
+        </div>
+        {briefing.pendingSubjects.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span className="text-xs text-muted-foreground">Pages not yet deployed:</span>
+            {briefing.pendingSubjects.map(s => (
+              <Badge key={s} variant="outline" className="text-[10px]">{s}</Badge>
+            ))}
+          </div>
+        )}
+        {briefing.deployedPages.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+            <span className="text-xs text-muted-foreground">Live on Canvas:</span>
+            {briefing.deployedPages.map(s => (
+              <Badge key={s} className="text-[10px] bg-success/15 text-success border-success/20" variant="outline">{s}</Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Top stat cards — system-wide signals */}

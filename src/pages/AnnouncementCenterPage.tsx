@@ -105,6 +105,14 @@ export default function AnnouncementCenterPage() {
   const [posting, setPosting] = useState<Record<string, boolean>>({});
   const [postingAll, setPostingAll] = useState(false);
 
+  // Edit drawer state
+  const [editingAnn, setEditingAnn] = useState<Announcement | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editScheduled, setEditScheduled] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [aiRewriting, setAiRewriting] = useState(false);
+
   // Manual create form
   const [showForm, setShowForm] = useState(false);
   const [formSubject, setFormSubject] = useState('');
@@ -451,6 +459,65 @@ export default function AnnouncementCenterPage() {
     }
   };
 
+  const openEdit = (ann: Announcement) => {
+    setEditingAnn(ann);
+    setEditTitle(ann.title || '');
+    setEditContent(ann.content || '');
+    setEditScheduled(ann.scheduled_post || '');
+  };
+
+  const handleEditSave = async () => {
+    if (!editingAnn) return;
+    setEditSaving(true);
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .update({
+          title: editTitle,
+          content: editContent,
+          scheduled_post: editScheduled || null,
+        })
+        .eq('id', editingAnn.id);
+      if (error) throw error;
+      toast.success('Announcement updated');
+      setEditingAnn(null);
+      loadAnnouncements(selectedWeekId || undefined);
+    } catch (e: any) {
+      toast.error('Save failed', { description: e.message });
+    }
+    setEditSaving(false);
+  };
+
+  const handleAiRewrite = async () => {
+    if (!editContent.trim()) return;
+    setAiRewriting(true);
+    try {
+      const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a helpful assistant that rewrites Canvas LMS announcements for elementary school teachers. Keep the same facts and structure. Use warm, clear, parent-friendly language. Return only the HTML body content, no explanation.'
+            },
+            { role: 'user', content: `Rewrite this announcement:\n\n${editContent}` }
+          ]
+        })
+      });
+      const data = await res.json();
+      const rewritten = data.choices?.[0]?.message?.content;
+      if (rewritten) {
+        setEditContent(rewritten);
+        toast.success('AI rewrite complete — review before saving');
+      }
+    } catch (e: any) {
+      toast.error('AI rewrite failed', { description: e.message });
+    }
+    setAiRewriting(false);
+  };
+
   const handlePost = async (ann: Announcement) => {
     if (!ann.course_id || !ann.title) { toast.error('Missing course ID or title'); return; }
     setPosting((p) => ({ ...p, [ann.id]: true }));
@@ -656,7 +723,11 @@ export default function AnnouncementCenterPage() {
         ) : announcements.map((ann) => {
           const borderClass = SUBJECT_BORDER[ann.subject || ''] || 'border-l-muted';
           return (
-            <Card key={ann.id} className={`transition-all border-l-4 ${borderClass} ${ann.status === 'POSTED' ? 'opacity-70' : ''}`}>
+            <Card
+              key={ann.id}
+              className={`transition-all border-l-4 ${borderClass} ${ann.status === 'POSTED' ? 'opacity-70' : ''} cursor-pointer hover:shadow-md`}
+              onClick={() => openEdit(ann)}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -686,12 +757,12 @@ export default function AnnouncementCenterPage() {
                   </div>
                   <div className="flex gap-2">
                     {ann.status === 'DRAFT' && (
-                      <Button size="sm" variant="outline" onClick={() => handlePost(ann)} disabled={posting[ann.id]} className="gap-1 text-xs">
+                      <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handlePost(ann); }} disabled={posting[ann.id]} className="gap-1 text-xs">
                         {posting[ann.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                         Post
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => handleDelete(ann.id)} className="text-destructive hover:text-destructive">
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(ann.id); }} className="text-destructive hover:text-destructive">
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -701,6 +772,84 @@ export default function AnnouncementCenterPage() {
           );
         })}
       </div>
+
+      {/* Full edit drawer */}
+      <Dialog open={!!editingAnn} onOpenChange={(o) => { if (!o) setEditingAnn(null); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4" />
+              Edit Announcement
+              {editingAnn?.status && (
+                <Badge className={`text-xs ml-2 ${statusColor(editingAnn.status)}`}>
+                  {editingAnn.status}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 p-6 overflow-auto flex-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Title</label>
+                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scheduled Post (ET)</label>
+                <Input
+                  type="datetime-local"
+                  value={editScheduled ? editScheduled.slice(0, 16) : ''}
+                  onChange={(e) => setEditScheduled(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subject</label>
+                <div className="flex items-center h-10 px-3 rounded border border-border text-sm text-muted-foreground">
+                  {editingAnn?.subject || '—'}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Content (HTML)</label>
+                <Button
+                  size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
+                  onClick={handleAiRewrite} disabled={aiRewriting}
+                >
+                  {aiRewriting ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>✦</span>}
+                  AI Rewrite
+                </Button>
+              </div>
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={8}
+                className="text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</label>
+              <div
+                className="rounded border border-border bg-white p-4 text-sm max-h-64 overflow-auto"
+                dangerouslySetInnerHTML={{ __html: editContent }}
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t">
+            <Button variant="outline" onClick={() => setEditingAnn(null)}>Cancel</Button>
+            <div className="flex gap-2">
+              {editingAnn?.status === 'DRAFT' && (
+                <Button variant="secondary" onClick={async () => { await handleEditSave(); if (editingAnn) handlePost({ ...editingAnn, title: editTitle, content: editContent, scheduled_post: editScheduled }); }}>
+                  Save & Post Now
+                </Button>
+              )}
+              <Button onClick={handleEditSave} disabled={editSaving}>
+                {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
