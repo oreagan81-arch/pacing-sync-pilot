@@ -88,6 +88,9 @@ export default function AssignmentsPage() {
   const [filter, setFilter] = useState<string>('All');
   const [deployResults, setDeployResults] = useState<Record<string, DeployStatus>>({});
   const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
+  const [editOverrides, setEditOverrides] = useState<
+    Record<string, Partial<{ title: string; dueDate: string; points: number; gradingType: string }>>
+  >({});
   const [testMode, setTestMode] = useState(false);
   const [testRunning, setTestRunning] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
