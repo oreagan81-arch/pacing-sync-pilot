@@ -31,7 +31,9 @@ Deno.serve(async (req) => {
             try {
               const full = await getPage(courseId, p.url);
               fullBody = full.body;
-            } catch (_) { /* skip body fetch failures */ }
+            } catch (err) { 
+              errors.push(`course ${courseId} page ${p.url}: body fetch failed - ${err instanceof Error ? err.message : String(err)}`);
+            }
           }
           await sb.from('canvas_snapshots').upsert(
             {
