@@ -459,7 +459,64 @@ export default function AnnouncementCenterPage() {
     }
   };
 
-  const handlePost = async (ann: Announcement) => {
+  const openEdit = (ann: Announcement) => {
+    setEditingAnn(ann);
+    setEditTitle(ann.title || '');
+    setEditContent(ann.content || '');
+    setEditScheduled(ann.scheduled_post || '');
+  };
+
+  const handleEditSave = async () => {
+    if (!editingAnn) return;
+    setEditSaving(true);
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .update({
+          title: editTitle,
+          content: editContent,
+          scheduled_post: editScheduled || null,
+        })
+        .eq('id', editingAnn.id);
+      if (error) throw error;
+      toast.success('Announcement updated');
+      setEditingAnn(null);
+      loadAnnouncements(selectedWeekId || undefined);
+    } catch (e: any) {
+      toast.error('Save failed', { description: e.message });
+    }
+    setEditSaving(false);
+  };
+
+  const handleAiRewrite = async () => {
+    if (!editContent.trim()) return;
+    setAiRewriting(true);
+    try {
+      const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a helpful assistant that rewrites Canvas LMS announcements for elementary school teachers. Keep the same facts and structure. Use warm, clear, parent-friendly language. Return only the HTML body content, no explanation.'
+            },
+            { role: 'user', content: `Rewrite this announcement:\n\n${editContent}` }
+          ]
+        })
+      });
+      const data = await res.json();
+      const rewritten = data.choices?.[0]?.message?.content;
+      if (rewritten) {
+        setEditContent(rewritten);
+        toast.success('AI rewrite complete — review before saving');
+      }
+    } catch (e: any) {
+      toast.error('AI rewrite failed', { description: e.message });
+    }
+    setAiRewriting(false);
+  };
     if (!ann.course_id || !ann.title) { toast.error('Missing course ID or title'); return; }
     setPosting((p) => ({ ...p, [ann.id]: true }));
     try {
