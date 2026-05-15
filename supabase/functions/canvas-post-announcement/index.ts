@@ -28,6 +28,7 @@ Deno.serve(async (req) => {
 
   try {
     const { courseId, title, message, delayedPostAt, weekId, subject, type } = await req.json();
+    const safeType = type || 'custom'; // Fallback prevents idempotency breaks on null types
 
     if (!courseId || !title) {
       return new Response(JSON.stringify({ error: "Missing courseId or title" }), {
@@ -83,13 +84,13 @@ Deno.serve(async (req) => {
     // If we've already posted an announcement with the same (week_id, subject, type),
     // return the existing canvas_url instead of re-posting. Prevents double-posts
     // on cron retries.
-    if (weekId && subject && type) {
+    if (weekId && subject) {
       const { data: existing } = await sb
         .from("announcements")
         .select("id, posted_at, course_id")
         .eq("week_id", weekId)
         .eq("subject", subject)
-        .eq("type", type)
+        .eq("type", safeType)
         .not("posted_at", "is", null)
         .order("posted_at", { ascending: false })
         .limit(1)
@@ -176,7 +177,7 @@ Deno.serve(async (req) => {
     });
 
     // Write posted_at + canvas_url back to announcements table.
-    if (weekId && subject && type) {
+    if (weekId && subject) {
       await sb
         .from("announcements")
         .update({
@@ -186,7 +187,7 @@ Deno.serve(async (req) => {
         })
         .eq("week_id", weekId)
         .eq("subject", subject)
-        .eq("type", type)
+        .eq("type", safeType)
         .is("posted_at", null);
     }
 
