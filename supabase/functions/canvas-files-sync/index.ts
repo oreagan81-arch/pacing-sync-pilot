@@ -233,7 +233,11 @@ Deno.serve(async (req) => {
         }
         if (!pageFiles.length) break;
 
-        for (const f of pageFiles) {
+        // Process files in this page concurrently.
+        // NOTE: Gemini AI fallback is intentionally skipped here to stay within the
+        // 150s edge-function timeout. Unclassified files are picked up by the
+        // nightly classifier job.
+        await Promise.all(pageFiles.map(async (f) => {
           const displayName = f.display_name || f.filename || `file-${f.id}`;
           const ext = (displayName.split(".").pop() || "pdf").toLowerCase();
           const cls = classifyByRegex(displayName);
@@ -245,7 +249,7 @@ Deno.serve(async (req) => {
           let lessonNum: string | null = null;
           let slug: string | null = null;
 
-          // 1) Learning-rules first — bypass the AI when we've corrected this filename before.
+          // 1) Learning-rules first
           const rule = await lookupLearningRule(supabase, displayName);
           if (rule && (rule.subject || rule.type || rule.lessonNum)) {
             subject = rule.subject ?? subject;
@@ -257,11 +261,12 @@ Deno.serve(async (req) => {
               slug = generateSlug(subject, type, lessonNum ?? "");
             }
             stats.classified++;
-            // Bump usage count (fire and forget)
-            await supabase
+            // Bump usage count (fire and forget, single round-trip)
+            supabase
               .from("learning_rules")
-              .update({ applied_count: (await supabase.from("learning_rules").select("applied_count").eq("id", rule.ruleId).maybeSingle()).data?.applied_count + 1 || 1, last_applied: now })
-              .eq("id", rule.ruleId);
+              .update({ last_applied: now })
+              .eq("id", rule.ruleId)
+              .then(() => {});
           } else if (cls) {
             // 2) Regex match
             subject = cls.subject;
@@ -271,23 +276,11 @@ Deno.serve(async (req) => {
             friendly = generateFriendlyName(cls.subject, cls.type, cls.lessonNum, ext);
             slug = generateSlug(cls.subject, cls.type, cls.lessonNum);
             stats.classified++;
-          } else {
-            // 3) Gemini fallback
-            const ai = await classifyWithGemini(displayName, subject);
-            if (ai && ai.subject && ai.type) {
-              subject = ai.subject;
-              type = ai.type;
-              lessonNum = ai.lessonNum;
-              confidence = "ai";
-              friendly = generateFriendlyName(subject, type, lessonNum ?? "", ext);
-              slug = generateSlug(subject, type, lessonNum ?? "");
-              stats.classified++;
-            }
           }
+          // 3) Gemini fallback removed from sync hot path — nightly job handles it.
 
           const needsRename = !!friendly && friendly !== displayName;
 
-          // Upsert file row keyed on drive_file_id (Canvas file id)
           await supabase.from("files").upsert(
             {
               drive_file_id: String(f.id),
@@ -305,7 +298,6 @@ Deno.serve(async (req) => {
             { onConflict: "drive_file_id" },
           );
 
-          // High-confidence → upsert content_map
           if (cls && lessonNum) {
             const ref = lessonRef(cls.type, lessonNum);
             await supabase.from("content_map").upsert(
@@ -331,7 +323,7 @@ Deno.serve(async (req) => {
 
           stats.synced++;
           total++;
-        }
+        }));
 
         if (pageFiles.length < 100) break;
         page++;
