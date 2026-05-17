@@ -60,6 +60,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Upsert into canvas_orphan_files triage table
+    try {
+      const sb = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      if (enriched.length) {
+        await sb.from("canvas_orphan_files").upsert(
+          enriched.map((f) => ({
+            canvas_file_id: String(f.id),
+            course_id: String(courseId),
+            original_name: f.display_name || f.filename || null,
+            canvas_url: f.url,
+            status: "PENDING",
+          })),
+          { onConflict: "canvas_file_id" },
+        );
+      }
+    } catch (e) {
+      console.warn("[canvas-fetch-folder-files] orphan upsert failed:", e);
+    }
+
     return new Response(
       JSON.stringify({ ok: true, folder: { id: folder.id, name: folder.name }, files: enriched, match }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
