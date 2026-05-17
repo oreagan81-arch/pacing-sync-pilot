@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Globe, Rocket, Eye, Code, ExternalLink, Copy, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
@@ -90,6 +91,7 @@ export default function PageBuilderPage() {
   } | null>(null);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
+  const [editableHtml, setEditableHtml] = useState<string>('');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
@@ -243,6 +245,11 @@ export default function PageBuilderPage() {
   // Reset preview error when generated HTML changes
   useEffect(() => setPreviewError(false), [generatedHtml]);
 
+  // Sync generated HTML to editable state
+  useEffect(() => {
+    setEditableHtml(generatedHtml);
+  }, [generatedHtml]);
+
   // Deploy with retry healing — up to 3 attempts with backoff
   const deployWithRetry = useCallback(
     async (subject: string, payload: object, maxAttempts = 3): Promise<any> => {
@@ -363,7 +370,8 @@ export default function PageBuilderPage() {
     setDeploying((p) => ({ ...p, [subject]: true }));
 
     try {
-      const contentHash = await sha256Hex(html);
+      const finalHtml = activeSubject === subject ? (editableHtml || html) : html;
+      const contentHash = await sha256Hex(finalHtml);
       const result = testMode
         ? {
             status: 'DEPLOYED',
@@ -374,7 +382,7 @@ export default function PageBuilderPage() {
             courseId,
             pageUrl: pageSlug,
             pageTitle,
-            bodyHtml: html,
+            bodyHtml: finalHtml,
             published: true,
             setFrontPage: true,
             weekId: selectedWeekId || null,
@@ -718,7 +726,7 @@ export default function PageBuilderPage() {
                         </span>
                       </div>
                       <iframe
-                        key={generatedHtml}
+                        key={editableHtml}
                         srcDoc={`<!DOCTYPE html><html><head>
                           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
                           <style>
@@ -727,7 +735,7 @@ export default function PageBuilderPage() {
                             .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
                             .kl_solid_border { display: block; }
                           </style>
-                        </head><body>${generatedHtml}</body></html>`}
+                        </head><body>${editableHtml}</body></html>`}
                         onError={() => setPreviewError(true)}
                         onLoad={(e) => {
                           try {
@@ -745,9 +753,17 @@ export default function PageBuilderPage() {
                     </div>
                   )
                 ) : (
-                  <pre className="text-xs bg-muted text-foreground p-4 rounded-lg overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
-                    {generatedHtml}
-                  </pre>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground px-1">
+                      Edit the HTML directly. The preview updates as you type. Changes here are used when you click Deploy.
+                    </p>
+                    <Textarea
+                      value={editableHtml}
+                      onChange={(e) => setEditableHtml(e.target.value)}
+                      className="font-mono text-xs min-h-[500px] w-full resize-y"
+                      spellCheck={false}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>
