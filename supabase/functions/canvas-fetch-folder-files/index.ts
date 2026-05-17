@@ -9,6 +9,7 @@
  *   { ok: true, folder: {id,name}, files: [{id, display_name, url, html_url}], match?: {...} }
  */
 import { listFolders, listFolderFiles, CANVAS_BASE } from "../_shared/canvas-api.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
