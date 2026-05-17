@@ -228,6 +228,44 @@ export default function NewsletterPage() {
     setPreviewMode('edit');
   };
 
+  const handleCopyLastWeek = async () => {
+    const last = newsletters[0];
+    if (!last) { toast.error('No previous newsletter found'); return; }
+    if (!last.html_content?.trim()) { toast.error('Last newsletter has no saved HTML — save it first'); return; }
+
+    setCopying(true);
+    try {
+      const today = new Date();
+      const dow = today.getDay();
+      const mondayOffset = dow === 0 ? -6 : 1 - dow;
+      const mon = new Date(today);
+      mon.setDate(today.getDate() + mondayOffset);
+      const fri = new Date(mon);
+      fri.setDate(mon.getDate() + 4);
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+      const { data, error } = await supabase.functions.invoke('newsletter-rollover', {
+        body: { previousHtml: last.html_content, newStartDate: fmt(mon), newEndDate: fmt(fri) }
+      });
+
+      if (error) throw error;
+      if (!data?.html) throw new Error(data?.error || 'No HTML returned');
+
+      setHtmlContent(data.html);
+      setActiveNewsletterId(null);
+      setDateRange(`${mon.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${fri.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`);
+
+      if (Array.isArray(last.points_of_contact) && last.points_of_contact.length) setPointsOfContact(last.points_of_contact);
+      if (Array.isArray(last.quick_links) && last.quick_links.length) setQuickLinks(last.quick_links);
+      setFooterLine(last.footer_line || DEFAULT_FOOTER);
+
+      toast.success('Newsletter updated for new week — review and edit before saving');
+    } catch (e: any) {
+      toast.error('Rollover failed', { description: e.message });
+    }
+    setCopying(false);
+  };
+
   return (
     <div className="space-y-6 animate-slide-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
