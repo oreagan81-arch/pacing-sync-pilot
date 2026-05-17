@@ -160,6 +160,45 @@ export type Database = {
         }
         Relationships: []
       }
+      canvas_orphan_files: {
+        Row: {
+          ai_lesson_ref: string | null
+          ai_suggested_folder: string | null
+          ai_suggested_name: string | null
+          canvas_file_id: string
+          canvas_url: string | null
+          course_id: string | null
+          created_at: string
+          original_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ai_lesson_ref?: string | null
+          ai_suggested_folder?: string | null
+          ai_suggested_name?: string | null
+          canvas_file_id: string
+          canvas_url?: string | null
+          course_id?: string | null
+          created_at?: string
+          original_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_lesson_ref?: string | null
+          ai_suggested_folder?: string | null
+          ai_suggested_name?: string | null
+          canvas_file_id?: string
+          canvas_url?: string | null
+          course_id?: string | null
+          created_at?: string
+          original_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       canvas_patterns: {
         Row: {
           confidence: number
