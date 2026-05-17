@@ -725,7 +725,7 @@ export default function PageBuilderPage() {
                         </span>
                       </div>
                       <iframe
-                        key={generatedHtml}
+                        key={editableHtml}
                         srcDoc={`<!DOCTYPE html><html><head>
                           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
                           <style>
@@ -734,7 +734,7 @@ export default function PageBuilderPage() {
                             .kl_subtitle { color: #6b7280; font-size: 0.9rem; }
                             .kl_solid_border { display: block; }
                           </style>
-                        </head><body>${generatedHtml}</body></html>`}
+                        </head><body>${editableHtml}</body></html>`}
                         onError={() => setPreviewError(true)}
                         onLoad={(e) => {
                           try {
