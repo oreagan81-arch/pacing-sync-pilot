@@ -245,6 +245,11 @@ export default function PageBuilderPage() {
   // Reset preview error when generated HTML changes
   useEffect(() => setPreviewError(false), [generatedHtml]);
 
+  // Sync generated HTML to editable state
+  useEffect(() => {
+    setEditableHtml(generatedHtml);
+  }, [generatedHtml]);
+
   // Deploy with retry healing — up to 3 attempts with backoff
   const deployWithRetry = useCallback(
     async (subject: string, payload: object, maxAttempts = 3): Promise<any> => {
