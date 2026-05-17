@@ -752,9 +752,17 @@ export default function PageBuilderPage() {
                     </div>
                   )
                 ) : (
-                  <pre className="text-xs bg-muted text-foreground p-4 rounded-lg overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
-                    {generatedHtml}
-                  </pre>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground px-1">
+                      Edit the HTML directly. The preview updates as you type. Changes here are used when you click Deploy.
+                    </p>
+                    <Textarea
+                      value={editableHtml}
+                      onChange={(e) => setEditableHtml(e.target.value)}
+                      className="font-mono text-xs min-h-[500px] w-full resize-y"
+                      spellCheck={false}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>
