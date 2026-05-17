@@ -370,7 +370,8 @@ export default function PageBuilderPage() {
     setDeploying((p) => ({ ...p, [subject]: true }));
 
     try {
-      const contentHash = await sha256Hex(html);
+      const finalHtml = activeSubject === subject ? (editableHtml || html) : html;
+      const contentHash = await sha256Hex(finalHtml);
       const result = testMode
         ? {
             status: 'DEPLOYED',
@@ -381,7 +382,7 @@ export default function PageBuilderPage() {
             courseId,
             pageUrl: pageSlug,
             pageTitle,
-            bodyHtml: html,
+            bodyHtml: finalHtml,
             published: true,
             setFrontPage: true,
             weekId: selectedWeekId || null,
