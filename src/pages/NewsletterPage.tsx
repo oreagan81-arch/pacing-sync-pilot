@@ -277,8 +277,12 @@ export default function NewsletterPage() {
           <Button variant="outline" size="sm" onClick={handleNew} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" /> New
           </Button>
+          <Button variant="outline" size="sm" onClick={handleCopyLastWeek} disabled={copying} className="gap-1.5">
+            <Mail className="h-3.5 w-3.5" /> {copying ? 'Copying...' : 'Copy Last Week'}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleSave} className="gap-1.5">
             Save Draft
+          </Button>
           </Button>
           <Button size="sm" onClick={handlePost} disabled={posting || !htmlContent} className="gap-1.5">
             <Send className="h-3.5 w-3.5" /> Queue for Friday
