@@ -91,6 +91,7 @@ export default function PageBuilderPage() {
   } | null>(null);
   const [activeSubject, setActiveSubject] = useState<string>('Math');
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
+  const [editableHtml, setEditableHtml] = useState<string>('');
   const [deploying, setDeploying] = useState<Record<string, boolean>>({});
   const [deployStatuses, setDeployStatuses] = useState<Record<string, { status: string; canvasUrl?: string }>>({});
   const [deployingAll, setDeployingAll] = useState(false);
