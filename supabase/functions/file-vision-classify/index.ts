@@ -1,3 +1,9 @@
+// file-vision-classify
+// Input: { canvasFileId: string }
+// Fetches the file from canvas_orphan_files.canvas_url, sends bytes to Gemini,
+// stores ai_suggested_name + ai_lesson_ref on the orphan row, and returns the parsed result.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -37,27 +43,52 @@ const classifyTool = {
   },
 };
 
+const TYPE_ABBR: Record<string, string> = {
+  worksheet: "L",
+  test: "T",
+  study_guide: "SG",
+  answer_key: "AK",
+  resource: "R",
+};
+
+function buildLessonRef(subject: string, type: string, lessonNum: string): string {
+  const subj = (subject || "Unknown").replace(/\s+/g, "");
+  const abbr = TYPE_ABBR[type] || "L";
+  const padded = String(lessonNum || "").replace(/\D/g, "").padStart(3, "0");
+  return `${subj}_Lesson_${padded}_${abbr}`;
+}
+
+function mimeFromName(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "image/png";
+}
+
+async function bytesToBase64(bytes: Uint8Array): Promise<string> {
+  // Chunked to avoid stack overflow on large files
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { image_base64, filename, mime_type } = await req.json();
-    if (!image_base64) {
-      return new Response(JSON.stringify({ error: "Missing image_base64" }), {
+    const { canvasFileId } = await req.json();
+    if (!canvasFileId) {
+      return new Response(JSON.stringify({ error: "Missing canvasFileId" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-
-    // Detect mime type from filename or explicit param
-    let detectedMime = mime_type || "image/png";
-    if (!mime_type && filename) {
-      const ext = filename.split(".").pop()?.toLowerCase();
-      if (ext === "pdf") detectedMime = "application/pdf";
-      else if (ext === "jpg" || ext === "jpeg") detectedMime = "image/jpeg";
-      else if (ext === "webp") detectedMime = "image/webp";
     }
 
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -68,6 +99,44 @@ Deno.serve(async (req) => {
       });
     }
 
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    // 1. Look up the orphan row
+    const { data: orphan, error: orphanErr } = await supabase
+      .from("canvas_orphan_files")
+      .select("*")
+      .eq("canvas_file_id", String(canvasFileId))
+      .maybeSingle();
+    if (orphanErr || !orphan) {
+      return new Response(JSON.stringify({ error: "Orphan file not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!orphan.canvas_url) {
+      return new Response(JSON.stringify({ error: "Orphan file missing canvas_url" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2. Fetch the file bytes from Canvas
+    const fileResp = await fetch(orphan.canvas_url);
+    if (!fileResp.ok) {
+      return new Response(
+        JSON.stringify({ error: `Failed to fetch file (${fileResp.status})` }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const buf = new Uint8Array(await fileResp.arrayBuffer());
+    const mime = fileResp.headers.get("content-type")?.split(";")[0]?.trim() ||
+      mimeFromName(orphan.original_name || "");
+    const base64 = await bytesToBase64(buf);
+
+    // 3. Call Gemini
     const prompt = `Look at this educational worksheet/document image from a 4th/5th grade school. Identify the subject, type, and lesson number from the visual content.
 
 Common naming patterns for suggested_name:
@@ -76,7 +145,7 @@ Common naming patterns for suggested_name:
 - Format: PREFIX_TYPE + lesson num padded to 3 digits + .pdf
   Example: SM5_L078.pdf, RM4_T012.pdf
 
-${filename ? `Original filename: "${filename}"` : ""}
+Original filename: "${orphan.original_name ?? ""}"
 
 Use the classify_file tool to return your answer.`;
 
@@ -93,12 +162,7 @@ Use the classify_file tool to return your answer.`;
             role: "user",
             content: [
               { type: "text", text: prompt },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${detectedMime};base64,${image_base64}`,
-                },
-              },
+              { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } },
             ],
           },
         ],
@@ -118,8 +182,7 @@ Use the classify_file tool to return your answer.`;
 
     const aiResult = await response.json();
     const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-
-    let parsed;
+    let parsed: { subject: string; type: string; lesson_num: string; suggested_name: string };
     if (toolCall?.function?.arguments) {
       parsed = JSON.parse(toolCall.function.arguments);
     } else {
@@ -127,13 +190,32 @@ Use the classify_file tool to return your answer.`;
       try {
         parsed = JSON.parse(content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim());
       } catch {
-        parsed = { subject: "Unknown", type: "resource", lesson_num: "", suggested_name: filename || "unknown.pdf" };
+        parsed = {
+          subject: "Unknown",
+          type: "resource",
+          lesson_num: "",
+          suggested_name: orphan.original_name || "unknown.pdf",
+        };
       }
     }
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const aiLessonRef = buildLessonRef(parsed.subject, parsed.type, parsed.lesson_num);
+
+    // 4. Update the orphan row
+    await supabase
+      .from("canvas_orphan_files")
+      .update({
+        ai_suggested_name: parsed.suggested_name,
+        ai_suggested_folder: parsed.subject,
+        ai_lesson_ref: aiLessonRef,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("canvas_file_id", orphan.canvas_file_id);
+
+    return new Response(
+      JSON.stringify({ ...parsed, ai_lesson_ref: aiLessonRef }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500,
